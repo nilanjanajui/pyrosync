@@ -284,16 +284,9 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
       el.setAttribute('tabindex', '0');
 
       el.innerHTML = `
-        <div class="flex flex-col items-center group relative">
-          <span class="${sizeClass} filter drop-shadow-[0_0_8px_rgba(249,115,22,0.95)] drop-shadow-[0_0_16px_rgba(239,68,68,0.7)] ${pulseClass}">
+        <div class="flex items-center justify-center">
+          <span class="${sizeClass} filter drop-shadow-[0_0_8px_rgba(249,115,22,0.95)] drop-shadow-[0_0_16px_rgba(239,68,68,0.7)] ${pulseClass} select-none">
             🔥
-          </span>
-          <span class="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-black/90 border ${
-            isSelected
-              ? 'border-orange-400 text-orange-200 shadow-[0_0_8px_rgba(249,115,22,0.8)]'
-              : 'border-app-border text-app-textMuted'
-          } tabular-nums -mt-1 shadow-md">
-            ${Math.round(count)}
           </span>
         </div>
       `;

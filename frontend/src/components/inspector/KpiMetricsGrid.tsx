@@ -22,7 +22,9 @@ export const KpiMetricsGrid: React.FC = () => {
 
     const mIdx = activeMonth ? dataset.monthIndexMap.get(activeMonth) ?? 0 : dataset.numMonths - 1;
     const currentMonthStr = dataset.months[mIdx];
-    const currentCalMonth = parseInt(currentMonthStr.split('-')[1], 10); // 1-12
+    const [currentYearStr, currentMonStr] = currentMonthStr.split('-');
+    const currentYear = parseInt(currentYearStr, 10);
+    const currentCalMonth = parseInt(currentMonStr, 10); // 1-12
 
     const harmCount = Math.round(harmSeries.values[mIdx] || 0);
     const modisCount = Math.round(modisSeries.values[mIdx] || 0);
@@ -37,15 +39,17 @@ export const KpiMetricsGrid: React.FC = () => {
       ? +(((harmCount - calMedian) / calMedian) * 100).toFixed(1)
       : 0;
 
-    // Climatological Peak Month
-    let peakCalMonth = 8; // August default
-    let peakMedian = -1;
-    for (let c = 1; c <= 12; c++) {
-      const vals = climatology.get(c) || [];
-      const m = median(vals);
-      if (m > peakMedian) {
-        peakMedian = m;
-        peakCalMonth = c;
+    // Dynamically calculate peak month for the selected year
+    let yearPeakCalMonth = currentCalMonth;
+    let yearMaxCount = -1;
+    for (let i = 0; i < dataset.months.length; i++) {
+      const [yrStr, monStr] = dataset.months[i].split('-');
+      if (parseInt(yrStr, 10) === currentYear) {
+        const val = harmSeries.values[i];
+        if (!isNaN(val) && val > yearMaxCount) {
+          yearMaxCount = val;
+          yearPeakCalMonth = parseInt(monStr, 10);
+        }
       }
     }
 
@@ -82,13 +86,19 @@ export const KpiMetricsGrid: React.FC = () => {
       : 36.4;
     const meanBright = +(315 + Math.min(45, meanFrp * 0.45)).toFixed(1);
 
+    const isPeakOfMonth = currentCalMonth === yearPeakCalMonth;
+
     return {
       harmCount,
       modisCount,
       viirsCount,
       calMedian,
       anomalyPct,
-      peakMonthName: MONTH_NAMES[peakCalMonth - 1],
+      selectedYear: currentYear,
+      activeMonthName: MONTH_NAMES[currentCalMonth - 1],
+      yearPeakMonthName: MONTH_NAMES[yearPeakCalMonth - 1],
+      isPeakOfMonth,
+      yearMaxCount: Math.round(yearMaxCount),
       recordLabel: `${recordMon} ${recordYear} (${Math.round(recordVal).toLocaleString()})`,
       meanFrp,
       meanBright,
@@ -149,17 +159,20 @@ export const KpiMetricsGrid: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI 3: Climatological Peak */}
+      {/* KPI 3: Dynamic Active Month & Year Peak */}
       <div className="bg-app-surface1 rounded-2xl p-4 border border-app-border shadow-sm relative overflow-hidden">
         <div className="flex items-center justify-between text-xs text-app-textMuted mb-1 font-mono">
-          <span>Climatological Peak</span>
+          <span>Active Slice ({metrics.selectedYear})</span>
           <Calendar className="w-4 h-4 text-amber-400" />
         </div>
         <div className="text-2xl font-bold font-mono text-amber-400 tracking-tight">
-          {metrics.peakMonthName}
+          {metrics.activeMonthName}
         </div>
         <div className="text-[11px] text-app-textSubdued mt-1 font-mono truncate" title={metrics.recordLabel}>
-          Record: {metrics.recordLabel}
+          {metrics.isPeakOfMonth
+            ? `★ Annual Peak (${metrics.yearMaxCount.toLocaleString()})`
+            : `Peak: ${metrics.yearPeakMonthName} (${metrics.yearMaxCount.toLocaleString()})`}{' '}
+          &bull; Record: {metrics.recordLabel}
         </div>
       </div>
 
@@ -179,4 +192,3 @@ export const KpiMetricsGrid: React.FC = () => {
     </div>
   );
 };
-
