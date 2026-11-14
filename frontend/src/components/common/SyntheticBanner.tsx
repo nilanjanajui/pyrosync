@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle } from 'lucide-react';
+import copy from '../../copy';
 
 interface SyntheticBannerProps {
   isSynthetic: boolean;
@@ -9,22 +9,19 @@ export const SyntheticBanner: React.FC<SyntheticBannerProps> = ({ isSynthetic })
   if (!isSynthetic) return null;
 
   return (
-    <aside
+    <div
       role="alert"
       aria-label="Synthetic Data Warning"
-      className="bg-red-950/95 border-b-2 border-red-600 text-red-100 px-4 py-2 flex items-center justify-center gap-3 shadow-2xl z-50 sticky top-0 font-mono text-xs"
+      className="bg-amber-950/80 border-b border-amber-600/50 text-amber-100 px-4 py-1 text-xs flex items-center justify-center gap-2 font-sans relative z-10"
     >
-      <div className="p-1 rounded bg-red-900 border border-red-500 text-white shrink-0">
-        <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse" aria-hidden="true" />
-      </div>
-      <div>
-        <strong className="font-black tracking-wider uppercase text-white mr-2">
-          ⚠ SYNTHETIC DEMO DATA
-        </strong>
-        <span className="text-red-200">
-          Not for operational fire management decisions. Test dataset with simulated detection records.
-        </span>
-      </div>
-    </aside>
+      <span className="font-bold tracking-wider uppercase text-[11px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+        {copy.syntheticBanner.badge}
+      </span>
+      <span className="text-amber-200 text-xs">
+        {copy.syntheticBanner.message}
+      </span>
+    </div>
   );
 };
+
+export default SyntheticBanner;

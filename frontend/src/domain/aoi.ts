@@ -1,6 +1,6 @@
 /**
  * AOI (Area of Interest) domain logic.
- * Handles bbox/center+radius definitions, cell snapping, and area calculations.
+ * Handles bbox, center+radius, state, and polygon definitions, cell snapping, and area calculations.
  * Uses turf for point-in-polygon and circle generation.
  */
 import booleanPointInPolygon from '@turf/boolean-point-in-polygon';
@@ -10,7 +10,7 @@ import { point, polygon, featureCollection } from '@turf/helpers';
 import type { Feature, Polygon, BBox } from 'geojson';
 import type { GridFeature } from '../datasource/schema';
 
-export type AoiMode = 'bbox' | 'radius' | 'state';
+export type AoiMode = 'bbox' | 'radius' | 'state' | 'polygon';
 
 export interface BboxAoi {
   mode: 'bbox';
@@ -28,11 +28,26 @@ export interface StateAoi {
   mode: 'state';
 }
 
-export type Aoi = BboxAoi | RadiusAoi | StateAoi;
+export interface PolygonAoi {
+  mode: 'polygon';
+  geometry: Feature<Polygon>;
+}
+
+export type Aoi = BboxAoi | RadiusAoi | StateAoi | PolygonAoi;
+
+export type RegionKey = 'all' | 'north' | 'central' | 'south' | 'draw';
+
+export const REGION_PRESETS: Record<'all' | 'north' | 'central' | 'south', Aoi> = {
+  all: { mode: 'state' },
+  north: { mode: 'bbox', bbox: [-124.5, 38.8, -119.5, 42.0] },
+  central: { mode: 'bbox', bbox: [-123.0, 35.5, -118.0, 38.8] },
+  south: { mode: 'bbox', bbox: [-121.0, 32.5, -114.1, 35.5] },
+};
 
 /** Returns the polygon for the AOI (for filtering and display) */
 export function aoiToPolygon(aoi: Aoi): Feature<Polygon> | null {
   if (aoi.mode === 'state') return null; // entire state — no polygon clip needed
+  if (aoi.mode === 'polygon') return aoi.geometry;
   if (aoi.mode === 'bbox') {
     const [w, s, e, n] = aoi.bbox;
     return polygon([
@@ -103,13 +118,21 @@ export function estimateAoiAreaKm2(aoi: Aoi): number {
     const kmPerDegLon = 111.32 * Math.cos((latM * Math.PI) / 180);
     return Math.abs(e - w) * kmPerDegLon * Math.abs(n - s) * kmPerDegLat;
   }
+  if (aoi.mode === 'polygon') {
+    const b = bboxTurf(aoi.geometry);
+    const [w, s, e, n] = b;
+    const latM = (s + n) / 2;
+    const kmPerDegLat = 111.32;
+    const kmPerDegLon = 111.32 * Math.cos((latM * Math.PI) / 180);
+    return Math.abs(e - w) * kmPerDegLon * Math.abs(n - s) * kmPerDegLat * 0.7; // rough estimate
+  }
   return 0;
 }
 
-/** Minimum recommended AOI area: below this, cell-level bias warning is shown */
+/** Minimum recommended AOI area: below this, small area warning is shown for estimated months */
 export const MIN_AOI_AREA_KM2 = 500; // roughly 50 10km cells
 
-/** Check if the AOI might have unreliable predictions due to small area */
+/** Check if the AOI is below minimum size */
 export function isAoiTooSmall(aoi: Aoi): boolean {
   return estimateAoiAreaKm2(aoi) < MIN_AOI_AREA_KM2;
 }
