@@ -36,16 +36,17 @@
     },
     "harmonized": {
       "type": "object",
-      "required": ["cell", "month", "n", "monthSource"],
+      "required": ["cell", "month", "n", "source"],
       "properties": {
         "cell": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
         "month": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
         "n": { "type": "array", "items": { "type": "number", "minimum": 0 } },
-        "monthSource": {
+        "source": {
           "type": "array",
+          "description": "Per-record source code: 0=observed_viirs, 1=predicted_modis_viirs, 2=predicted_terra_only",
           "items": {
-            "type": "string",
-            "enum": ["native_viirs", "scaled_modis", "model"]
+            "type": "integer",
+            "enum": [0, 1, 2]
           }
         }
       }

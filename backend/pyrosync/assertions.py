@@ -49,12 +49,22 @@ def assert_month_indexes(cell_months: dict[str, Any]) -> None:
 
 
 def assert_harmonized_values(harmonized_block: dict[str, Any]) -> None:
-    """Assert harmonized n values are finite and >= 0."""
+    """Assert harmonized n values are finite and >= 0, and source codes are valid (0, 1, 2)."""
     if not harmonized_block or "n" not in harmonized_block:
         return
     for i, val in enumerate(harmonized_block["n"]):
         assert not math.isnan(val) and not math.isinf(val), f"Harmonized row {i} non-finite: {val}"
         assert val >= 0.0, f"Harmonized row {i} negative value: {val}"
+    # Validate source codes if present
+    if "source" in harmonized_block:
+        valid_src = {0, 1, 2}
+        for i, src in enumerate(harmonized_block["source"]):
+            assert src in valid_src, (
+                f"Harmonized row {i} invalid source code: {src} (must be 0, 1, or 2)"
+            )
+        assert len(harmonized_block["source"]) == len(harmonized_block["n"]), (
+            "Harmonized 'source' array length must match 'n' array length"
+        )
 
 
 def assert_reconciliation(

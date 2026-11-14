@@ -63,6 +63,18 @@ export const BoundaryGeoJsonSchema = z.object({
 
 export type BoundaryGeoJson = z.infer<typeof BoundaryGeoJsonSchema>;
 
+/** Source code per harmonized cell-month record.
+ * 0 = observed VIIRS (2012-02 to 2021-12)
+ * 1 = predicted MODIS→VIIRS (2002-07 to 2012-01)
+ * 2 = predicted Terra-only (2000-11 to 2002-06)
+ */
+export const HarmonizedSourceCode = z.union([
+  z.literal(0),
+  z.literal(1),
+  z.literal(2),
+]);
+export type HarmonizedSourceCodeType = z.infer<typeof HarmonizedSourceCode>;
+
 export const CellMonthsSchema = z.object({
   months: z.array(z.string()),
   cells: z.array(z.string()),
@@ -80,30 +92,88 @@ export const CellMonthsSchema = z.object({
     n: z.array(z.number().int().nonnegative()),
     frp: z.array(z.number().nonnegative()),
   }),
-  harmonized: z.object({
-    cell: z.array(z.number().int().nonnegative()),
-    month: z.array(z.number().int().nonnegative()),
-    n: z.array(z.number().nonnegative()),
-    monthSource: z.array(z.enum(['native_viirs', 'scaled_modis', 'model'])),
-  }).optional(),
+  harmonized: z
+    .object({
+      cell: z.array(z.number().int().nonnegative()),
+      month: z.array(z.number().int().nonnegative()),
+      n: z.array(z.number().nonnegative()),
+      /** Per-record source code (integer 0 | 1 | 2) */
+      source: z.array(HarmonizedSourceCode),
+    })
+    .optional(),
 });
 
 export type CellMonths = z.infer<typeof CellMonthsSchema>;
+
+/** Per-month source code and validation status arrays */
+export const PerMonthSourcesSchema = z.object({
+  months: z.array(z.string()),
+  source: z.array(HarmonizedSourceCode),
+  status: z.array(z.enum(['validated', 'predicted_unvalidated'])),
+});
+
+/** Seasonal VIIRS/MODIS ratio object (DJF/MAM/JJA/SON) */
+export const SeasonalRatiosSchema = z.object({
+  DJF: z.number(),
+  MAM: z.number(),
+  JJA: z.number(),
+  SON: z.number(),
+});
 
 export const HarmonizationSchema = z.object({
   status: z.enum(['provisional', 'validated']),
   method: z.string(),
   version: z.string(),
   blendStart: z.literal('2012-02'),
-  scale: z.object({
-    global: z.number().nullable(),
-    terraOnly: z.number().nullable(),
-    bySeason: z.record(z.string(), z.number()).nullable(),
+  firstAquaMonth: z.literal('2002-07'),
+
+  /** VIIRS/MODIS seasonal ratios for MODIS+Aqua era (2002-07 → 2012-01) */
+  seasonalRatios: SeasonalRatiosSchema,
+
+  /** VIIRS/MODIS seasonal ratios for Terra-only era (2000-11 → 2002-06) */
+  terraOnlyRatios: SeasonalRatiosSchema,
+
+  /** Per-month source flags across the full record */
+  perMonthSources: PerMonthSourcesSchema,
+
+  /** Corrected bootstrap CIs on seasonal ratios */
+  bootstrapCi: z.object({
+    seasons: z.array(z.string()),
+    lo95: z.array(z.number()),
+    hi95: z.array(z.number()),
   }),
+
   description: z.string(),
+
   validation: z.object({
     notes: z.string(),
-    metrics: z.record(z.string(), z.any()),
+    /** LOYO-CV region-month WAPE (combined) */
+    wape: z.number(),
+    /** LOYO-CV WAPE for Terra-only era */
+    wapeTerraOnly: z.number(),
+    /** Forward test bias (train ≤2019, test 2020-21). Negative = under-predict. */
+    forwardTestBias: z.number(),
+    biasTable: z.object({
+      bins: z.array(z.string()),
+      biasPercent: z.array(z.number()),
+    }),
+    uncertainty: z.object({
+      label: z.string(),
+      note: z.string(),
+      state: z.object({
+        seasons: z.array(z.string()),
+        lo5: z.array(z.number()),
+        hi95: z.array(z.number()),
+      }),
+      regions: z.array(
+        z.object({
+          region: z.string(),
+          seasons: z.array(z.string()),
+          lo5: z.array(z.number()),
+          hi95: z.array(z.number()),
+        })
+      ),
+    }),
   }),
 });
 
@@ -143,19 +213,22 @@ export const HotspotsIndexSchema = z.object({
   files: z.record(
     z.string(),
     z.object({
-      modis: z.object({
-        path: z.string(),
-        rows: z.number().int().nonnegative(),
-        bytesGzip: z.number().int().nonnegative(),
-      }).optional(),
-      viirs: z.object({
-        path: z.string(),
-        rows: z.number().int().nonnegative(),
-        bytesGzip: z.number().int().nonnegative(),
-      }).optional(),
+      modis: z
+        .object({
+          path: z.string(),
+          rows: z.number().int().nonnegative(),
+          bytesGzip: z.number().int().nonnegative(),
+        })
+        .optional(),
+      viirs: z
+        .object({
+          path: z.string(),
+          rows: z.number().int().nonnegative(),
+          bytesGzip: z.number().int().nonnegative(),
+        })
+        .optional(),
     })
   ),
 });
 
 export type HotspotsIndex = z.infer<typeof HotspotsIndexSchema>;
-

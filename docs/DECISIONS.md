@@ -27,3 +27,31 @@ This document records architectural, data, and design decisions made throughout 
 - **Context**: The frontend is a static Vite SPA requiring SPA route rewrites and asset caching rules.
 - **Decision**: Configure `frontend/vercel.json` with SPA rewrites to `/index.html` and explicit cache headers (no cache for `manifest.json`, aggressive immutable caching for static versioned datasets).
 
+
+---
+
+## 2026-11-14 — Milestone 1, 2 & 3: Contract Update, Map AOI & Burn Calendar
+
+### DEC-006: Harmonization Data Contract Update (Real Pipeline Alignment)
+- **Context**: Colab notebook outputs (Phases 5-7) fit a seasonal ratio model (DJF/MAM/JJA/SON = 3.315/3.175/4.275/4.476 for combined MODIS, and 7.714/5.906/8.145/8.977 for Terra-only era). The previous synthetic contract assumed a single scaling number and missing per-record provenance.
+- **Decision**:
+  - Updated `harmonization.json` JSON schema and Zod model with `seasonalRatios`, `terraOnlyRatios`, `firstAquaMonth: "2002-07"`, `perMonthSources` (with integer codes 0=observed_viirs, 1=predicted_modis_viirs, 2=predicted_terra_only), `bootstrapCi`, and `uncertainty` containing empirical 5th–95th percentile typical error bands from leave-one-year-out CV.
+  - Added integer `source` array to `cell_months.json` harmonized block to track per-record provenance.
+  - Set `validation.wape = 0.129`, `validation.forwardTestBias = -0.096`, and cell-level bias warning for low counts.
+
+### DEC-007: Geospatial AOI Snapping & MapLibre Grid Choropleth
+- **Context**: Users need to select arbitrary AOIs (statewide, bounding box, or center+radius) and instantly recalculate the aggregated burning series.
+- **Decision**:
+  - Implemented `FireMap.tsx` using MapLibre GL with Carto Dark Matter basemap (no API key required) and resilient slate-900 offline fallback.
+  - Used `promoteId: "id"` and `setFeatureState` for performant cell highlight and Cividis cumulative detection choropleth without re-uploading GeoJSON geometries.
+  - Implemented `aoi.ts` with Turf.js for point-in-polygon cell snapping and bounding-box calculations.
+  - Added warning banner when AOI area < 500 km² (`isAoiTooSmall`), warning that cell-level predictions are biased at low counts.
+
+### DEC-008: ARIA Grid Burn Activity Calendar & Accessibility
+- **Context**: The challenge requires an accessible month × year calendar displaying burning activity, comparing counts against multi-year averages/medians, distinguishing observed from predicted data, and supporting WCAG 2.2 AA.
+- **Decision**:
+  - Built `BurnCalendar.tsx` adhering to the ARIA Grid pattern with full arrow-key and Home/End navigation (`role="grid"`, `role="row"`, `role="gridcell"`).
+  - Used Cividis sequential palette (perceptually uniform and colorblind safe) for counts.
+  - Used PuOr diverging palette for the "vs. Median" anomaly view.
+  - Distinguished predicted months (pre-2012-02) using CSS hatched overlays (`bg-hatched`) and dashed borders for the Terra-only era, ensuring differences are never communicated by color alone.
+  - Highlighted 2012-02 blend boundary with a dedicated sky-blue border and 2012-01 with a partial-month marker.

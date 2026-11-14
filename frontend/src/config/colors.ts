@@ -35,3 +35,14 @@ export function getAnomalyColor(t: number): string {
   return interpolatePuOr(clamped);
 }
 
+/** Pre-computed 12-step Cividis palette for calendar cells and map legend. */
+export const CIVIDIS: string[] = Array.from({ length: 12 }, (_, i) =>
+  interpolateCividis(i / 11)
+);
+
+/** Pre-computed 12-step PuOr diverging palette for anomaly calendar view. */
+export const PUOR_DIVERGING: string[] = Array.from({ length: 12 }, (_, i) =>
+  interpolatePuOr(i / 11)
+);
+
+

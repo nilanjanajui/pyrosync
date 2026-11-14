@@ -46,6 +46,8 @@ export interface DenseDataset {
   viirsTotal: Float32Array;
   viirsFRP: Float32Array;
   harmonizedTotal: Float32Array;
+  /** Source code per matrix cell: 0=observed_viirs, 1=predicted_modis_viirs, 2=predicted_terra_only, 255=no_data */
+  harmonizedSource: Uint8Array;
 
   // Masks: Uint8Array of length numMonths (1 = sensor operating / valid data, 0 = null / unoperated)
   modisMask: Uint8Array;
@@ -161,6 +163,8 @@ export async function loadDataset(basePath = '/datasets'): Promise<DenseDataset>
   const viirsTotal = new Float32Array(matrixSize);
   const viirsFRP = new Float32Array(matrixSize);
   const harmonizedTotal = new Float32Array(matrixSize);
+  // 255 = no data / sensor not operating for this cell-month
+  const harmonizedSource = new Uint8Array(matrixSize).fill(255);
 
   // Unroll MODIS sparse columns
   const mBlock = cellMonths.modis;
@@ -194,6 +198,7 @@ export async function loadDataset(basePath = '/datasets'): Promise<DenseDataset>
       const mIdx = hBlock.month[i];
       const offset = mIdx * numCells + cIdx;
       harmonizedTotal[offset] = hBlock.n[i];
+      harmonizedSource[offset] = hBlock.source[i];
     }
   }
 
@@ -234,6 +239,7 @@ export async function loadDataset(basePath = '/datasets'): Promise<DenseDataset>
     viirsTotal,
     viirsFRP,
     harmonizedTotal,
+    harmonizedSource,
     modisMask,
     viirsMask,
     harmonizedMask,

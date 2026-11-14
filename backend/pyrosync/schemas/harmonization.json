@@ -2,7 +2,19 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "PyroSyncHarmonization",
   "type": "object",
-  "required": ["status", "method", "version", "blendStart", "scale", "description", "validation"],
+  "required": [
+    "status",
+    "method",
+    "version",
+    "blendStart",
+    "firstAquaMonth",
+    "seasonalRatios",
+    "terraOnlyRatios",
+    "perMonthSources",
+    "bootstrapCi",
+    "description",
+    "validation"
+  ],
   "properties": {
     "status": {
       "type": "string",
@@ -11,27 +23,139 @@
     "method": { "type": "string" },
     "version": { "type": "string" },
     "blendStart": { "type": "string", "const": "2012-02" },
-    "scale": {
+    "firstAquaMonth": { "type": "string", "const": "2002-07" },
+    "seasonalRatios": {
       "type": "object",
-      "required": ["global", "terraOnly", "bySeason"],
+      "description": "VIIRS/MODIS ratio by meteorological season for MODIS+Aqua era (2002-07 to 2012-01)",
+      "required": ["DJF", "MAM", "JJA", "SON"],
       "properties": {
-        "global": { "type": ["number", "null"] },
-        "terraOnly": { "type": ["number", "null"] },
-        "bySeason": {
-          "type": ["object", "null"],
-          "additionalProperties": { "type": "number" }
+        "DJF": { "type": "number" },
+        "MAM": { "type": "number" },
+        "JJA": { "type": "number" },
+        "SON": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "terraOnlyRatios": {
+      "type": "object",
+      "description": "VIIRS/MODIS ratio by season for Terra-only era (2000-11 to 2002-06)",
+      "required": ["DJF", "MAM", "JJA", "SON"],
+      "properties": {
+        "DJF": { "type": "number" },
+        "MAM": { "type": "number" },
+        "JJA": { "type": "number" },
+        "SON": { "type": "number" }
+      },
+      "additionalProperties": false
+    },
+    "perMonthSources": {
+      "type": "object",
+      "description": "Per-month source code: 0=observed_viirs, 1=predicted_modis_viirs, 2=predicted_terra_only",
+      "required": ["months", "source", "status"],
+      "properties": {
+        "months": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "source": {
+          "type": "array",
+          "items": { "type": "integer", "enum": [0, 1, 2] }
+        },
+        "status": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["validated", "predicted_unvalidated"]
+          }
+        }
+      }
+    },
+    "bootstrapCi": {
+      "type": "object",
+      "description": "Bootstrap confidence intervals on seasonal ratios (corrected)",
+      "required": ["seasons", "lo95", "hi95"],
+      "properties": {
+        "seasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "lo95": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "hi95": {
+          "type": "array",
+          "items": { "type": "number" }
         }
       }
     },
     "description": { "type": "string" },
     "validation": {
       "type": "object",
-      "required": ["notes", "metrics"],
+      "required": ["notes", "wape", "wapeTerraOnly", "forwardTestBias", "biasTable", "uncertainty"],
       "properties": {
         "notes": { "type": "string" },
-        "metrics": { "type": "object" }
+        "wape": {
+          "type": "number",
+          "description": "Leave-one-year-out region-month WAPE (combined)"
+        },
+        "wapeTerraOnly": {
+          "type": "number",
+          "description": "LOYO-CV WAPE for Terra-only era"
+        },
+        "forwardTestBias": {
+          "type": "number",
+          "description": "Forward test (train <=2019, test 2020-21) bias. Negative = under-predict."
+        },
+        "biasTable": {
+          "type": "object",
+          "description": "Cell-level bias by MODIS count bin",
+          "required": ["bins", "biasPercent"],
+          "properties": {
+            "bins": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "biasPercent": {
+              "type": "array",
+              "items": { "type": "number" }
+            }
+          }
+        },
+        "uncertainty": {
+          "type": "object",
+          "description": "Empirical 5-95% typical-error bands (not confidence intervals)",
+          "required": ["label", "note", "state", "regions"],
+          "properties": {
+            "label": { "type": "string" },
+            "note": { "type": "string" },
+            "state": {
+              "type": "object",
+              "description": "State-level seasonal typical-error bands",
+              "required": ["seasons", "lo5", "hi95"],
+              "properties": {
+                "seasons": { "type": "array", "items": { "type": "string" } },
+                "lo5": { "type": "array", "items": { "type": "number" } },
+                "hi95": { "type": "array", "items": { "type": "number" } }
+              }
+            },
+            "regions": {
+              "type": "array",
+              "description": "Per-region typical-error entry",
+              "items": {
+                "type": "object",
+                "required": ["region", "seasons", "lo5", "hi95"],
+                "properties": {
+                  "region": { "type": "string" },
+                  "seasons": { "type": "array", "items": { "type": "string" } },
+                  "lo5": { "type": "array", "items": { "type": "number" } },
+                  "hi95": { "type": "array", "items": { "type": "number" } }
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
 }
-

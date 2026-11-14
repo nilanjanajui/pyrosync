@@ -120,7 +120,7 @@ def generate_synthetic_dataset(
 
     modis_cm = {"cell": [], "month": [], "n": [], "terra": [], "aqua": [], "frp": []}
     viirs_cm = {"cell": [], "month": [], "n": [], "frp": []}
-    harmonized_cm = {"cell": [], "month": [], "n": [], "monthSource": []}
+    harmonized_cm = {"cell": [], "month": [], "n": [], "source": []}
 
     # Hotspot shards partitioned by year: {"<year>_<sensor>": {cell, day, lat, lon, frp, sat, satCodes, dn}}
     epoch = date(2000, 1, 1)
@@ -247,28 +247,48 @@ def generate_synthetic_dataset(
                         shard["dn"].append(random.choice([0, 1]))
 
             # --- Harmonized series generation ---
-            # Priority 1 direct harmonized series:
-            # Months >= 2012-02 use native VIIRS; earlier months use MODIS scaled by 4.2
+            # Source codes: 0 = observed VIIRS (>=2012-02),
+            #               1 = predicted MODIS->VIIRS (2002-07 to 2012-01),
+            #               2 = predicted Terra-only (2000-11 to 2002-06)
             if m_idx >= viirs_complete_idx:
+                # Observed VIIRS
                 harm_n = (
                     float(v_count) if m_idx >= viirs_start_idx and "v_count" in locals() else 0.0
                 )
-            else:
+                harm_src = 0
+            elif m_idx >= aqua_start_idx:
+                # Predicted MODIS->VIIRS (combined MODIS era, 2002-07 to 2012-01)
                 harm_n = round(m_count * 4.2, 1)
+                harm_src = 1
+            else:
+                # Predicted Terra-only era (2000-11 to 2002-06)
+                harm_n = round(m_count * 6.9, 1)  # Terra-only seasonal avg
+                harm_src = 2
 
             if harm_n > 0:
                 harmonized_cm["cell"].append(c_idx)
                 harmonized_cm["month"].append(m_idx)
                 harmonized_cm["n"].append(harm_n)
+                harmonized_cm["source"].append(harm_src)
 
-    # Harmonized month source mapping (1 entry per month)
-    month_sources = []
+    # Build per-month source arrays for harmonization metadata
+    # Source codes: 0=observed_viirs, 1=predicted_modis_viirs, 2=predicted_terra_only
+    per_month_sources_list = []
+    per_month_status_list = []
+    per_month_src_int = []
     for m_idx, m_str in enumerate(months):
         if m_idx >= viirs_complete_idx:
-            month_sources.append("native_viirs")
+            per_month_src_int.append(0)
+            per_month_sources_list.append(m_str)
+            per_month_status_list.append("validated")
+        elif m_idx >= aqua_start_idx:
+            per_month_src_int.append(1)
+            per_month_sources_list.append(m_str)
+            per_month_status_list.append("predicted_unvalidated")
         else:
-            month_sources.append("scaled_modis")
-    harmonized_cm["monthSource"] = month_sources
+            per_month_src_int.append(2)
+            per_month_sources_list.append(m_str)
+            per_month_status_list.append("predicted_unvalidated")
 
     # Write hotspots index and shards
     shards_meta = {}
@@ -347,26 +367,76 @@ def generate_synthetic_dataset(
     # 5. Harmonization metadata
     harmonization = {
         "status": "provisional",
-        "method": "Direct empirical scaling + blend",
+        "method": "Seasonal ratio model (VIIRS-equivalent counts). Observed VIIRS from 2012-02; predicted from MODIS with seasonal ratios before that.",
         "version": "0.1.0-synth",
         "blendStart": "2012-02",
-        "scale": {
-            "global": 4.2,
-            "terraOnly": 4.5,
-            "bySeason": {
-                "winter": 3.8,
-                "spring": 4.0,
-                "summer": 4.3,
-                "fall": 4.4,
-            },
+        "firstAquaMonth": "2002-07",
+        "seasonalRatios": {
+            "DJF": 3.315,
+            "MAM": 3.175,
+            "JJA": 4.275,
+            "SON": 4.476,
         },
-        "description": "Synthetic demonstration dataset harmonizing MODIS and VIIRS active fire observations.",
+        "terraOnlyRatios": {
+            "DJF": 7.714,
+            "MAM": 5.906,
+            "JJA": 8.145,
+            "SON": 8.977,
+        },
+        "perMonthSources": {
+            "months": per_month_sources_list,
+            "source": per_month_src_int,
+            "status": per_month_status_list,
+        },
+        "bootstrapCi": {
+            "seasons": ["DJF", "MAM", "JJA", "SON"],
+            "lo95": [2.9, 2.7, 3.8, 3.9],
+            "hi95": [3.8, 3.7, 4.8, 5.1],
+        },
+        "description": (
+            "Synthetic demonstration dataset. Harmonized value = VIIRS-equivalent active-fire "
+            "detection count. Observed VIIRS from 2012-02; predicted from MODIS with seasonal "
+            "ratios (MODIS+Aqua era) or Terra-only ratios (2000-11 to 2002-06)."
+        ),
         "validation": {
-            "notes": "Synthetic benchmark fixtures with strict reconciliation checks.",
-            "metrics": {
-                "overlap_months": 119,
-                "spearman_r": 0.94,
-                "mae": 14.2,
+            "notes": (
+                "Synthetic benchmark fixtures. Real validation: LOYO-CV region-month WAPE=0.129 "
+                "(combined), 0.130 (Terra-only). Forward test (train <=2019, test 2020-21): "
+                "-9.6% (under-predict). Cell-level predictions biased at low counts; only valid "
+                "when summed over an area."
+            ),
+            "wape": 0.129,
+            "wapeTerraOnly": 0.130,
+            "forwardTestBias": -0.096,
+            "biasTable": {
+                "bins": ["MODIS=0", "MODIS=1-2", "MODIS=3-10", "MODIS>10"],
+                "biasPercent": [-100.0, 78.0, 75.0, 12.0],
+            },
+            "uncertainty": {
+                "label": "Typical error (5th–95th percentile)",
+                "note": (
+                    "Empirical prediction bands from leave-one-year-out cross-validation. "
+                    "NOT confidence intervals. Do not center on point estimate."
+                ),
+                "state": {
+                    "seasons": ["DJF", "MAM", "JJA", "SON"],
+                    "lo5": [0.72, 0.69, 0.78, 0.74],
+                    "hi95": [1.38, 1.41, 1.32, 1.36],
+                },
+                "regions": [
+                    {
+                        "region": "NorCal",
+                        "seasons": ["DJF", "MAM", "JJA", "SON"],
+                        "lo5": [0.65, 0.61, 0.70, 0.68],
+                        "hi95": [1.52, 1.58, 1.42, 1.48],
+                    },
+                    {
+                        "region": "SoCal",
+                        "seasons": ["DJF", "MAM", "JJA", "SON"],
+                        "lo5": [0.70, 0.68, 0.75, 0.71],
+                        "hi95": [1.42, 1.44, 1.35, 1.40],
+                    },
+                ],
             },
         },
     }

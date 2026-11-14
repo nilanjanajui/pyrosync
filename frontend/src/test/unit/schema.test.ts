@@ -47,7 +47,13 @@ describe('Data Contract & Zod Schema Validation', () => {
     const parsed = HarmonizationSchema.parse(harm);
     expect(parsed.status).toBe('provisional');
     expect(parsed.blendStart).toBe('2012-02');
-    expect(parsed.scale.global).toBe(4.2);
+    expect(parsed.firstAquaMonth).toBe('2002-07');
+    expect(parsed.seasonalRatios.DJF).toBe(3.315);
+    expect(parsed.seasonalRatios.JJA).toBe(4.275);
+    expect(parsed.terraOnlyRatios.DJF).toBe(7.714);
+    expect(parsed.validation.wape).toBe(0.129);
+    expect(parsed.validation.forwardTestBias).toBe(-0.096);
+    expect(parsed.perMonthSources.months.length).toBe(254);
   });
 
   it('fails validation on corrupted manifest.json and flags missing field', () => {

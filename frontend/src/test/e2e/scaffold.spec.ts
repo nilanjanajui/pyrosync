@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Milestone 0: Scaffold & Data Contract Verification', () => {
+test.describe('Milestone 0+1+2+3: Scaffold, Contract & UI Verification', () => {
   test('boots cleanly on synthetic data and renders persistent red banner', async ({ page }) => {
     await page.goto('/');
 
@@ -13,14 +13,19 @@ test.describe('Milestone 0: Scaffold & Data Contract Verification', () => {
     await expect(page.getByRole('heading', { name: 'PyroSync' })).toBeVisible();
     await expect(page.getByText('Coverage: 2000-11 to 2021-12', { exact: true })).toBeVisible();
 
-    // Check study area and temporal coverage metrics
-    await expect(page.getByText('California (Synthetic Test Fixture)')).toBeVisible();
-    await expect(page.getByText('254 calendar months')).toBeVisible();
+    // Check map section heading is present
+    await expect(page.getByRole('heading', { name: /California 10 km Grid/i })).toBeVisible();
+
+    // Check calendar section is present
+    await expect(page.getByRole('grid', { name: /Burn activity calendar/i })).toBeVisible();
+
+    // Check footer says data ends 2021-12
+    await expect(page.getByRole('contentinfo').getByText('2021-12')).toBeVisible();
 
     // Capture verification screenshot
     await page.screenshot({
-      path: '../docs/screenshots/m0-synthetic-boot.png',
-      fullPage: true,
+      path: '../docs/screenshots/m1-app-boot.png',
+      fullPage: false,
     });
   });
 
@@ -38,8 +43,7 @@ test.describe('Milestone 0: Scaffold & Data Contract Verification', () => {
     // Capture verification screenshot
     await page.screenshot({
       path: '../docs/screenshots/m0-malformed-error.png',
-      fullPage: true,
+      fullPage: false,
     });
   });
 });
-
