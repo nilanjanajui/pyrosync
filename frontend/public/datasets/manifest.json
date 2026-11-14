@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0-synthetic",
+  "generatedAtUtc": "2026-11-14T14:28:36.717583Z",
+  "synthetic": true,
+  "studyArea": {
+    "name": "California (Synthetic Test Fixture)",
+    "bbox": [
+      -124.48,
+      32.53,
+      -114.13,
+      42.01
+    ]
+  },
+  "coverage": {
+    "start": "2000-11",
+    "end": "2021-12"
+  },
+  "modisStart": "2000-11",
+  "viirsStart": "2012-01",
+  "viirsFirstCompleteMonth": "2012-02",
+  "viirsPartialMonths": [
+    "2012-01"
+  ],
+  "firstAquaMonth": "2002-07",
+  "grid": {
+    "cellKm": 10,
+    "crs": "EPSG:6933",
+    "cells": 30
+  },
+  "totals": {
+    "modisDetections": 10724,
+    "viirsDetections": 18295
+  },
+  "sources": [
+    "MODIS Collection 6.1 (Terra and Aqua)",
+    "VIIRS VNP14IMGTDL (Suomi-NPP 375m)"
+  ],
+  "filters": "Presumed vegetation fires (type == 0)."
+}

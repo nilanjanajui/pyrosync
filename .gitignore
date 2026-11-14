@@ -1,7 +1,30 @@
-data/
+# Data directory (anchored to root only)
+/data/
+
+# Data files (never commit raw data)
 *.parquet
-*.csv
 *.pkl
+*.csv
 .ipynb_checkpoints/
 
+# Node dependencies and build
+node_modules/
+dist/
 
+# Python virtual environment and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Environment files
+.env*
+!.env.example
+
+# Test reports and coverage
+coverage/
+playwright-report/
+test-results/

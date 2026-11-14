@@ -1,0 +1,25 @@
+{
+  "status": "provisional",
+  "method": "Direct empirical scaling + blend",
+  "version": "0.1.0-synth",
+  "blendStart": "2012-02",
+  "scale": {
+    "global": 4.2,
+    "terraOnly": 4.5,
+    "bySeason": {
+      "winter": 3.8,
+      "spring": 4.0,
+      "summer": 4.3,
+      "fall": 4.4
+    }
+  },
+  "description": "Synthetic demonstration dataset harmonizing MODIS and VIIRS active fire observations.",
+  "validation": {
+    "notes": "Synthetic benchmark fixtures with strict reconciliation checks.",
+    "metrics": {
+      "overlap_months": 119,
+      "spearman_r": 0.94,
+      "mae": 14.2
+    }
+  }
+}

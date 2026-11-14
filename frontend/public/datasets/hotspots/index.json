@@ -1,0 +1,224 @@
+{
+  "version": "1.0.0",
+  "quantization": {
+    "latScale": 10000,
+    "lonScale": 10000,
+    "frpScale": 10,
+    "dayEpoch": "2000-01-01"
+  },
+  "columns": [
+    "cell",
+    "day",
+    "lat",
+    "lon",
+    "frp",
+    "sat",
+    "dn"
+  ],
+  "files": {
+    "2000": {
+      "modis": {
+        "path": "hotspots/2000_modis.json",
+        "rows": 28,
+        "bytesGzip": 460
+      }
+    },
+    "2001": {
+      "modis": {
+        "path": "hotspots/2001_modis.json",
+        "rows": 536,
+        "bytesGzip": 5327
+      }
+    },
+    "2002": {
+      "modis": {
+        "path": "hotspots/2002_modis.json",
+        "rows": 489,
+        "bytesGzip": 5016
+      }
+    },
+    "2003": {
+      "modis": {
+        "path": "hotspots/2003_modis.json",
+        "rows": 504,
+        "bytesGzip": 5259
+      }
+    },
+    "2004": {
+      "modis": {
+        "path": "hotspots/2004_modis.json",
+        "rows": 533,
+        "bytesGzip": 5500
+      }
+    },
+    "2005": {
+      "modis": {
+        "path": "hotspots/2005_modis.json",
+        "rows": 471,
+        "bytesGzip": 4933
+      }
+    },
+    "2006": {
+      "modis": {
+        "path": "hotspots/2006_modis.json",
+        "rows": 435,
+        "bytesGzip": 4634
+      }
+    },
+    "2007": {
+      "modis": {
+        "path": "hotspots/2007_modis.json",
+        "rows": 520,
+        "bytesGzip": 5388
+      }
+    },
+    "2008": {
+      "modis": {
+        "path": "hotspots/2008_modis.json",
+        "rows": 497,
+        "bytesGzip": 5151
+      }
+    },
+    "2009": {
+      "modis": {
+        "path": "hotspots/2009_modis.json",
+        "rows": 517,
+        "bytesGzip": 5342
+      }
+    },
+    "2010": {
+      "modis": {
+        "path": "hotspots/2010_modis.json",
+        "rows": 478,
+        "bytesGzip": 4985
+      }
+    },
+    "2011": {
+      "modis": {
+        "path": "hotspots/2011_modis.json",
+        "rows": 535,
+        "bytesGzip": 5527
+      }
+    },
+    "2012": {
+      "modis": {
+        "path": "hotspots/2012_modis.json",
+        "rows": 570,
+        "bytesGzip": 5825
+      },
+      "viirs": {
+        "path": "hotspots/2012_viirs.json",
+        "rows": 1989,
+        "bytesGzip": 17391
+      }
+    },
+    "2013": {
+      "viirs": {
+        "path": "hotspots/2013_viirs.json",
+        "rows": 1736,
+        "bytesGzip": 15328
+      },
+      "modis": {
+        "path": "hotspots/2013_modis.json",
+        "rows": 495,
+        "bytesGzip": 5141
+      }
+    },
+    "2014": {
+      "modis": {
+        "path": "hotspots/2014_modis.json",
+        "rows": 521,
+        "bytesGzip": 5361
+      },
+      "viirs": {
+        "path": "hotspots/2014_viirs.json",
+        "rows": 1852,
+        "bytesGzip": 16229
+      }
+    },
+    "2015": {
+      "modis": {
+        "path": "hotspots/2015_modis.json",
+        "rows": 458,
+        "bytesGzip": 4780
+      },
+      "viirs": {
+        "path": "hotspots/2015_viirs.json",
+        "rows": 1591,
+        "bytesGzip": 14098
+      }
+    },
+    "2016": {
+      "viirs": {
+        "path": "hotspots/2016_viirs.json",
+        "rows": 1852,
+        "bytesGzip": 16212
+      },
+      "modis": {
+        "path": "hotspots/2016_modis.json",
+        "rows": 520,
+        "bytesGzip": 5402
+      }
+    },
+    "2017": {
+      "modis": {
+        "path": "hotspots/2017_modis.json",
+        "rows": 452,
+        "bytesGzip": 4750
+      },
+      "viirs": {
+        "path": "hotspots/2017_viirs.json",
+        "rows": 1608,
+        "bytesGzip": 14282
+      }
+    },
+    "2018": {
+      "modis": {
+        "path": "hotspots/2018_modis.json",
+        "rows": 567,
+        "bytesGzip": 5792
+      },
+      "viirs": {
+        "path": "hotspots/2018_viirs.json",
+        "rows": 2001,
+        "bytesGzip": 17467
+      }
+    },
+    "2019": {
+      "modis": {
+        "path": "hotspots/2019_modis.json",
+        "rows": 552,
+        "bytesGzip": 5667
+      },
+      "viirs": {
+        "path": "hotspots/2019_viirs.json",
+        "rows": 1975,
+        "bytesGzip": 17233
+      }
+    },
+    "2020": {
+      "modis": {
+        "path": "hotspots/2020_modis.json",
+        "rows": 558,
+        "bytesGzip": 5754
+      },
+      "viirs": {
+        "path": "hotspots/2020_viirs.json",
+        "rows": 1966,
+        "bytesGzip": 17256
+      }
+    },
+    "2021": {
+      "modis": {
+        "path": "hotspots/2021_modis.json",
+        "rows": 488,
+        "bytesGzip": 5086
+      },
+      "viirs": {
+        "path": "hotspots/2021_viirs.json",
+        "rows": 1725,
+        "bytesGzip": 15268
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PyroSyncHotspotShard",
+  "type": "object",
+  "required": ["cell", "day", "lat", "lon", "frp", "sat", "satCodes"],
+  "properties": {
+    "cell": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0 }
+    },
+    "day": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "lat": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "lon": {
+      "type": "array",
+      "items": { "type": "integer" }
+    },
+    "frp": {
+      "type": "array",
+      "items": { "type": ["integer", "null"] }
+    },
+    "sat": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 0 }
+    },
+    "satCodes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "dn": {
+      "type": "array",
+      "items": { "type": "integer", "enum": [0, 1] }
+    }
+  }
+}
+

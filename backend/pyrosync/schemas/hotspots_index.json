@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PyroSyncHotspotsIndex",
+  "type": "object",
+  "required": ["version", "quantization", "columns", "files"],
+  "properties": {
+    "version": { "type": "string" },
+    "quantization": {
+      "type": "object",
+      "required": ["latScale", "lonScale", "frpScale", "dayEpoch"],
+      "properties": {
+        "latScale": { "type": "integer", "const": 10000 },
+        "lonScale": { "type": "integer", "const": 10000 },
+        "frpScale": { "type": "integer", "const": 10 },
+        "dayEpoch": { "type": "string", "const": "2000-01-01" }
+      }
+    },
+    "columns": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "modis": {
+            "type": "object",
+            "required": ["path", "rows", "bytesGzip"],
+            "properties": {
+              "path": { "type": "string" },
+              "rows": { "type": "integer", "minimum": 0 },
+              "bytesGzip": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "viirs": {
+            "type": "object",
+            "required": ["path", "rows", "bytesGzip"],
+            "properties": {
+              "path": { "type": "string" },
+              "rows": { "type": "integer", "minimum": 0 },
+              "bytesGzip": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

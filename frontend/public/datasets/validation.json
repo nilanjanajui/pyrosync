@@ -1,0 +1,30 @@
+{
+  "tables": [
+    {
+      "id": "synthetic_summary",
+      "title": "Synthetic Sensor Summary",
+      "note": "Reconciliation check between sensors across 2000-2021",
+      "columns": [
+        "Sensor",
+        "Total Detections",
+        "Active Years",
+        "Operating Status"
+      ],
+      "rows": [
+        [
+          "MODIS (Terra+Aqua)",
+          10724,
+          "2000-2021",
+          "Operational"
+        ],
+        [
+          "VIIRS (Suomi-NPP)",
+          18295,
+          "2012-2021",
+          "Operational"
+        ]
+      ]
+    }
+  ],
+  "figures": []
+}

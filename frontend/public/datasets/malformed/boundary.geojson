@@ -1,0 +1,1 @@
+{"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[-124.48, 32.53], [-114.13, 32.53], [-114.13, 42.01], [-124.48, 42.01], [-124.48, 32.53]]]}, "properties": {"name": "California"}}]}

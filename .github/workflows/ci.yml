@@ -1,0 +1,90 @@
+name: PyroSync CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- 1. Python Backend Checks ---
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install backend dependencies
+        run: |
+          cd backend
+          pip install --upgrade pip
+          pip install -e .
+          pip install -r requirements-dev.txt
+
+      - name: Backend Lint & Format (Ruff)
+        run: |
+          cd backend
+          ruff check pyrosync/ tests/
+          ruff format --check pyrosync/ tests/
+
+      - name: Backend Unit Tests (Pytest)
+        run: |
+          cd backend
+          pytest
+
+      # --- 2. Contract Test (synth -> check -> frontend acceptance) ---
+      - name: Generate synthetic dataset & validate schemas
+        run: |
+          cd backend
+          python -m pyrosync.cli synth --out ../frontend/public/datasets
+          python -m pyrosync.cli check --data ../frontend/public/datasets
+
+      # --- 3. Frontend Node Checks ---
+      - name: Set up Node.js LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Frontend Linting
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Frontend Typecheck
+        run: |
+          cd frontend
+          npm run typecheck
+
+      - name: Frontend Unit Tests (Vitest)
+        run: |
+          cd frontend
+          npm test
+
+      - name: Frontend Production Build
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Install Playwright Browsers
+        run: |
+          cd frontend
+          npx playwright install --with-deps chromium
+
+      - name: Playwright E2E Tests
+        run: |
+          cd frontend
+          npm run test:e2e
+

@@ -1,0 +1,2 @@
+[console_scripts]
+pyrosync = pyrosync.cli:main
