@@ -72,3 +72,4 @@ Cividis is the default and primary palette for all choropleth cells and heatmap 
 - **Glossary Hotspot Detection**: "One satellite pixel flagged as burning. It is not the same as one fire."
 - **Touch Target Size**: Minimum 44px on all buttons, chips, and slider controls.
 - **Automated Audit**: Audited with `@axe-core/playwright` with 0 critical or serious violations.
+
