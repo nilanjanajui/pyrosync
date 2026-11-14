@@ -3,9 +3,9 @@
  * Inspired by NASA mission control & high-altitude reconnaissance telemetry.
  *
  * Features:
+ *  - Fire Emoji Markers (🔥) showing active fire detections across terrain
  *  - 3D oblique perspective camera (pitch: 45°, bearing: -10°) with 2D/3D toggle
  *  - Carto Dark Matter vector basemap + resilient offline slate-900 canvas fallback
- *  - 10 km equal-area grid choropleth with Cividis sequential ramp
  *  - Glowing tactical fire perimeter & contour lines
  *  - Heads-Up Display (HUD) overlay: telemetry statistics, index counter, and
  *    tactical California inset locator mini-map with live GPS coordinates
@@ -24,6 +24,7 @@ import {
   Crosshair,
   AlertTriangle,
   RotateCcw,
+  Flame,
 } from 'lucide-react';
 
 interface FireMapProps {
@@ -35,7 +36,6 @@ function buildChoroplethExpression(maxCount: number): maplibregl.ExpressionSpeci
   if (maxCount <= 0) return ['literal', '#11181E'];
   const stops: (number | string)[] = [];
   CIVIDIS.forEach((color, i) => {
-    // Logarithmic curve to avoid blowout on extreme fire months
     const t = i / (CIVIDIS.length - 1);
     const val = t === 0 ? 0 : Math.pow(t, 1.8) * maxCount;
     stops.push(val, color);
@@ -51,6 +51,7 @@ function buildChoroplethExpression(maxCount: number): maplibregl.ExpressionSpeci
 export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
 
   const {
     aoi,
@@ -65,6 +66,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
   } = useAppStore();
 
   const [basemapFailed, setBasemapFailed] = useState(false);
+  const [displayStyle, setDisplayStyle] = useState<'emoji' | 'grid'>('emoji'); // Default to fire emojis!
   const [aoiTab, setAoiTab] = useState<'state' | 'bbox' | 'radius'>('state');
 
   // Manual Bbox Form state
@@ -217,21 +219,14 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         },
       });
 
-      // Primary Cividis choropleth fill
+      // Grid fill (transparent in emoji mode, choropleth in grid mode)
       map.addLayer({
         id: 'ca-grid-fill',
         type: 'fill',
         source: 'ca-grid',
         paint: {
           'fill-color': buildChoroplethExpression(maxCellCount),
-          'fill-opacity': [
-            'case',
-            ['boolean', ['feature-state', 'selected'], false],
-            0.88,
-            ['>', ['feature-state', 'count'], 0],
-            0.75,
-            0.05,
-          ],
+          'fill-opacity': 0.05,
         },
       });
 
@@ -245,11 +240,11 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
           'line-width': [
             'case',
             ['boolean', ['feature-state', 'selected'], false],
-            3.5,
+            4.0,
             0,
           ],
-          'line-blur': 2,
-          'line-opacity': 0.8,
+          'line-blur': 3,
+          'line-opacity': 0.85,
         },
       });
 
@@ -267,14 +262,14 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
           'line-width': [
             'case',
             ['boolean', ['feature-state', 'selected'], false],
-            1.8,
+            2.0,
             0.4,
           ],
-          'line-opacity': 0.7,
+          'line-opacity': 0.6,
         },
       });
 
-      // Click cell to toggle 25 km radius AOI
+      // Click cell on map to toggle 25 km radius AOI
       map.on('click', 'ca-grid-fill', (e) => {
         if (!e.features || e.features.length === 0) return;
         const feat = e.features[0];
@@ -303,6 +298,8 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
   useEffect(() => {
     initMap();
     return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
     };
@@ -323,7 +320,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     }
   };
 
-  // Sync AOI & counts into feature-states
+  // Sync AOI & counts into feature-states + layer styling
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
@@ -339,9 +336,29 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
       );
     });
 
-    // Update fill color expression based on current max
+    // Update fill layer based on displayStyle
     if (map.getLayer('ca-grid-fill')) {
-      map.setPaintProperty('ca-grid-fill', 'fill-color', buildChoroplethExpression(maxCellCount));
+      if (displayStyle === 'emoji') {
+        // Transparent in emoji mode so terrain and fire emojis dominate!
+        map.setPaintProperty('ca-grid-fill', 'fill-opacity', [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          0.08, // Subtle ambient warmth inside selected AOI
+          0,
+        ]);
+        map.setPaintProperty('ca-grid-fill', 'fill-color', '#F97316');
+      } else {
+        // Grid mode: solid choropleth fill
+        map.setPaintProperty('ca-grid-fill', 'fill-opacity', [
+          'case',
+          ['boolean', ['feature-state', 'selected'], false],
+          0.85,
+          ['>', ['feature-state', 'count'], 0],
+          0.70,
+          0.05,
+        ]);
+        map.setPaintProperty('ca-grid-fill', 'fill-color', buildChoroplethExpression(maxCellCount));
+      }
     }
 
     // Camera fly to AOI bounds
@@ -357,7 +374,81 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         );
       }
     }
-  }, [aoi, cellCounts, maxCellCount, dataset, setSelectedCellIndexes]);
+  }, [aoi, cellCounts, maxCellCount, displayStyle, dataset, setSelectedCellIndexes]);
+
+  // Update Fire Emoji HTML Markers on map
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Remove old markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    // If in grid mode, don't show emoji markers
+    if (displayStyle !== 'emoji') return;
+
+    const matchedSet = new Set(selectedCellIndexes);
+
+    dataset.grid.features.forEach((f, i) => {
+      const count = cellCounts[i];
+      if (count <= 0) return; // Only show fire emoji where there are real detections!
+
+      const isSelected = matchedSet.has(i);
+      const lon = f.properties.lon;
+      const lat = f.properties.lat;
+
+      // Scale emoji size and glow
+      const sizeClass = count > 50 ? 'text-3xl' : count > 15 ? 'text-2xl' : 'text-xl';
+      const glowFilter = isSelected
+        ? 'drop-shadow-[0_0_12px_rgba(249,115,22,1)] drop-shadow-[0_0_20px_rgba(255,100,0,0.8)]'
+        : 'drop-shadow-[0_0_8px_rgba(249,115,22,0.7)]';
+
+      const el = document.createElement('div');
+      el.className = `fire-emoji-marker cursor-pointer select-none transition-transform duration-200 hover:scale-135 hover:z-30 ${
+        isSelected ? 'z-20 scale-110' : 'z-10'
+      }`;
+      el.setAttribute('role', 'button');
+      el.setAttribute(
+        'aria-label',
+        `Active fire: ${Math.round(count)} detection records at ${lat.toFixed(2)}°N, ${lon.toFixed(2)}°W`
+      );
+      el.setAttribute('tabindex', '0');
+
+      el.innerHTML = `
+        <div class="flex flex-col items-center">
+          <span class="${sizeClass} ${glowFilter} filter animate-pulse">🔥</span>
+          <span class="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded-full bg-black/90 border ${
+            isSelected
+              ? 'border-orange-400 text-orange-200 shadow-[0_0_8px_rgba(249,115,22,0.8)]'
+              : 'border-app-border text-app-textMuted'
+          } tabular-nums -mt-1 shadow-md">
+            ${Math.round(count)}
+          </span>
+        </div>
+      `;
+
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setAoi({ mode: 'radius', center: [lon, lat], radiusKm: 25 });
+        setRadLon(lon.toFixed(3));
+        setRadLat(lat.toFixed(3));
+        setRadiusKm('25');
+        setAoiTab('radius');
+      });
+
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([lon, lat])
+        .addTo(map);
+
+      markersRef.current.push(marker);
+    });
+
+    return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+    };
+  }, [displayStyle, cellCounts, selectedCellIndexes, dataset, setAoi]);
 
   const handleResetStatewide = () => {
     setAoi({ mode: 'state' });
@@ -402,26 +493,56 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         <div className="flex items-center gap-2">
           <Crosshair className="w-4 h-4 text-app-accent" aria-hidden="true" />
           <h2 className="text-xs font-mono font-bold uppercase tracking-wider text-app-text">
-            Spatial Activity · 10 km Equal-Area Grid
+            Spatial Activity · California
           </h2>
           <span className="text-[11px] text-app-textSubdued font-mono">
-            ({dataset.grid.features.length.toLocaleString()} cells)
+            ({dataset.grid.features.length.toLocaleString()} grid cells)
           </span>
         </div>
 
-        {/* Tactical View Controls */}
+        {/* View Mode Controls: Fire Emojis 🔥 vs Grid Tiles ▦ + 2D/3D */}
         <div className="flex items-center gap-2">
+          {/* Display Mode Toggle */}
+          <div role="group" aria-label="Map presentation mode" className="flex items-center gap-1 bg-app-surface2 p-0.5 rounded border border-app-border text-xs font-mono">
+            <button
+              onClick={() => setDisplayStyle('emoji')}
+              aria-pressed={displayStyle === 'emoji'}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 ${
+                displayStyle === 'emoji'
+                  ? 'bg-app-accent text-white shadow-[0_0_10px_rgba(249,115,22,0.4)]'
+                  : 'text-app-textMuted hover:text-app-text'
+              }`}
+              title="Show active fire detection records as animated glowing fire emojis"
+            >
+              <span>🔥</span>
+              <span>Fire Emojis</span>
+            </button>
+            <button
+              onClick={() => setDisplayStyle('grid')}
+              aria-pressed={displayStyle === 'grid'}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all ${
+                displayStyle === 'grid'
+                  ? 'bg-app-accent text-white shadow-[0_0_10px_rgba(249,115,22,0.4)]'
+                  : 'text-app-textMuted hover:text-app-text'
+              }`}
+              title="Show 10km grid cell choropleth tiles"
+            >
+              ▦ Grid
+            </button>
+          </div>
+
+          {/* 3D / 2D Perspective Toggle */}
           <button
             onClick={toggle3d}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-mono font-medium transition-all focus:outline-none focus:ring-1 focus:ring-app-accent ${
               is3dPerspective
-                ? 'bg-app-accent/20 border border-app-accent/50 text-app-accent shadow-[0_0_10px_rgba(249,115,22,0.3)]'
+                ? 'bg-app-surface2 border border-app-borderLight text-app-text'
                 : 'bg-app-surface2 border border-app-border text-app-textMuted hover:text-app-text'
             }`}
             title="Toggle between 3D oblique perspective and 2D nadir plan view"
           >
-            <Compass className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>{is3dPerspective ? '3D Tactical' : '2D Plan'}</span>
+            <Compass className="w-3.5 h-3.5 text-app-accent" aria-hidden="true" />
+            <span>{is3dPerspective ? '3D' : '2D'}</span>
           </button>
 
           {aoi.mode !== 'state' && (
@@ -431,7 +552,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
               title="Reset Area of Interest to statewide California"
             >
               <RotateCcw className="w-3 h-3" aria-hidden="true" />
-              <span>Reset Statewide</span>
+              <span>Reset</span>
             </button>
           )}
         </div>
@@ -443,7 +564,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
           ref={mapContainerRef}
           className="w-full h-full cursor-crosshair"
           role="application"
-          aria-label="California 10km fire detection map. Click any cell to snap area of interest."
+          aria-label="California fire detection map. Click any fire emoji or cell to snap area of interest."
           tabIndex={0}
         />
 
@@ -494,14 +615,12 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
             {/* California silhouette with locator dot */}
             <div className="w-24 h-24 relative flex items-center justify-center">
               <svg viewBox="0 0 100 120" className="w-full h-full stroke-app-textMuted fill-app-surface2">
-                {/* Simplified CA outline */}
                 <path
                   d="M15,5 L85,5 L85,35 L95,65 L70,115 L45,115 L25,95 L15,40 Z"
                   strokeWidth="1.5"
                   strokeOpacity="0.4"
                   fillOpacity="0.25"
                 />
-                {/* Active location crosshair dot */}
                 <circle cx="50" cy="55" r="4" fill="#F97316" className="animate-ping" opacity="0.6" />
                 <circle cx="50" cy="55" r="3" fill="#F97316" />
               </svg>
@@ -516,34 +635,65 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
           </div>
         </div>
 
-        {/* Bottom Left Cividis Legend */}
+        {/* Bottom Left Legend */}
         <div className="absolute bottom-4 left-4 z-10 bg-app-bg/95 backdrop-blur-md border border-app-border rounded-lg p-2.5 shadow-2xl font-mono text-xs max-w-xs">
-          <div className="text-[10px] uppercase text-app-textSubdued tracking-wider mb-1 flex items-center justify-between">
-            <span>Detection Records</span>
-            <span className="text-[9px] text-app-textSubdued font-normal">(Cividis Scale)</span>
-          </div>
-          <div
-            className="h-2.5 w-44 rounded-sm border border-app-border"
-            style={{
-              background: `linear-gradient(to right, ${CIVIDIS.join(', ')})`,
-            }}
-            aria-hidden="true"
-          />
-          <div className="flex justify-between text-[10px] text-app-textMuted mt-1 tabular-nums">
-            <span>0</span>
-            <span>{Math.round(maxCellCount / 4).toLocaleString()}</span>
-            <span>{Math.round(maxCellCount).toLocaleString()}+</span>
-          </div>
-          <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-app-border text-[10px] text-app-textSubdued">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-app-accent" />
-              <span>Selected AOI</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-[#11181E] border border-app-border" />
-              <span>Zero</span>
-            </span>
-          </div>
+          {displayStyle === 'emoji' ? (
+            <div className="space-y-1.5">
+              <div className="text-[10px] uppercase text-app-textSubdued tracking-wider font-bold flex items-center gap-1.5">
+                <Flame className="w-3.5 h-3.5 text-app-accent" aria-hidden="true" />
+                <span>Active Fire Detections</span>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-app-text">
+                <div className="flex items-center gap-1">
+                  <span className="text-xl">🔥</span>
+                  <span className="text-[10px] text-app-textMuted">&gt; 50 det.</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-base">🔥</span>
+                  <span className="text-[10px] text-app-textMuted">10–50</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm">🔥</span>
+                  <span className="text-[10px] text-app-textMuted">&lt; 10</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-1 border-t border-app-border text-[10px] text-app-textSubdued">
+                <span className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-full border-2 border-app-accent" />
+                  <span>Selected Perimeter</span>
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="text-[10px] uppercase text-app-textSubdued tracking-wider mb-1 flex items-center justify-between">
+                <span>Detection Records</span>
+                <span className="text-[9px] text-app-textSubdued font-normal">(Cividis Scale)</span>
+              </div>
+              <div
+                className="h-2.5 w-44 rounded-sm border border-app-border"
+                style={{
+                  background: `linear-gradient(to right, ${CIVIDIS.join(', ')})`,
+                }}
+                aria-hidden="true"
+              />
+              <div className="flex justify-between text-[10px] text-app-textMuted mt-1 tabular-nums">
+                <span>0</span>
+                <span>{Math.round(maxCellCount / 4).toLocaleString()}</span>
+                <span>{Math.round(maxCellCount).toLocaleString()}+</span>
+              </div>
+              <div className="flex items-center gap-2 mt-1.5 pt-1 border-t border-app-border text-[10px] text-app-textSubdued">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-app-accent" />
+                  <span>Selected AOI</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-[#11181E] border border-app-border" />
+                  <span>Zero</span>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
