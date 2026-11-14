@@ -3,9 +3,12 @@ import { loadDataset, type DatasetLoadError } from './datasource/load';
 import { SyntheticBanner } from './components/common/SyntheticBanner';
 import { ErrorScreen } from './components/common/ErrorScreen';
 import { Header } from './components/layout/Header';
+import { AoiFilterBar } from './components/layout/AoiFilterBar';
 import { DatasetStatusStrip } from './components/layout/DatasetStatusStrip';
 import { Footer } from './components/layout/Footer';
+import { KpiMetricsGrid } from './components/inspector/KpiMetricsGrid';
 import { FireMap } from './components/map/FireMap';
+import { AnalyticsCharts } from './components/inspector/AnalyticsCharts';
 import { BurnCalendar } from './components/calendar/BurnCalendar';
 import { MonthInspector } from './components/inspector/MonthInspector';
 import { HarmonizationModal } from './components/modals/HarmonizationModal';
@@ -82,7 +85,7 @@ export const App: React.FC = () => {
   if (!dataset) return null;
 
   return (
-    <div className="min-h-screen bg-app-bg text-app-text flex flex-col font-sans selection:bg-app-accent selection:text-white">
+    <div className="min-h-screen bg-app-bg text-app-text flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
       {/* Screen Reader Skip Link */}
       <a
         href="#main-workspace"
@@ -91,7 +94,7 @@ export const App: React.FC = () => {
         Skip to main analytical workspace
       </a>
 
-      {/* Screen Reader Polite Live Region (Section 71) */}
+      {/* Screen Reader Polite Live Region */}
       <div
         role="status"
         aria-live="polite"
@@ -107,6 +110,9 @@ export const App: React.FC = () => {
       {/* Global Mission Control Header */}
       <Header manifest={dataset.manifest} harmonization={dataset.harmonization} />
 
+      {/* AOI Region & Coordinate Inspector Bar */}
+      <AoiFilterBar />
+
       {/* Dataset Status Strip */}
       <DatasetStatusStrip
         manifest={dataset.manifest}
@@ -114,30 +120,41 @@ export const App: React.FC = () => {
         numMonths={dataset.numMonths}
       />
 
-      {/* Primary Analytical Exploration Workspace (Map ~44% : Calendar ~56%) */}
+      {/* Primary Analytical Exploration Workspace (7 cols Left : 5 cols Right) */}
       <main
         id="main-workspace"
-        className="flex-1 max-w-[1720px] w-full mx-auto p-4 sm:p-6 space-y-4"
+        className="flex-1 max-w-[1920px] w-full mx-auto p-4 lg:p-6 grid grid-cols-1 xl:grid-cols-12 gap-5"
       >
-        {/* Top Split: 3D Tactical Map (Where?) + Burn Calendar (When?) */}
-        <div className="grid grid-cols-1 xl:grid-cols-[44%_56%] gap-4 items-start">
-          {/* Spatial Activity: 3D Oblique Grid Map & AOI Snapping */}
+        {/* Left Column (7 cols): KPIs + Interactive FireMap + Dual Analytics Charts */}
+        <div className="xl:col-span-7 flex flex-col gap-5">
+          {/* 4 KPI Metrics */}
+          <KpiMetricsGrid />
+
+          {/* Interactive FireMap with Fire Emoji Hotspot Markers */}
           <section aria-label="Spatial Activity Exploration">
             <FireMap dataset={dataset} />
           </section>
 
-          {/* Temporal Activity: 22-Year Burn Activity Calendar */}
-          <section aria-label="Temporal Activity Exploration">
-            <BurnCalendar />
+          {/* Dual Analytics Time-Series Charts */}
+          <section aria-label="Analytics Time-Series & Seasonal Profile">
+            <AnalyticsCharts />
           </section>
         </div>
 
-        {/* Selected Month Scientific Inspection Dock (What does this number mean?) */}
-        {activeMonth && (
-          <div className="transition-all animate-fadeIn">
-            <MonthInspector />
-          </div>
-        )}
+        {/* Right Column (5 cols): Harmonized Burning Activity Calendar + Month Inspector */}
+        <div className="xl:col-span-5 flex flex-col gap-5">
+          {/* 22-Year Burn Activity Calendar Heatmap */}
+          <section aria-label="Temporal Activity Exploration">
+            <BurnCalendar />
+          </section>
+
+          {/* Selected Month Scientific Provenance & Uncertainty Inspector */}
+          {activeMonth && (
+            <div className="transition-all animate-fadeIn">
+              <MonthInspector />
+            </div>
+          )}
+        </div>
       </main>
 
       {/* Persistent Technical Footer */}

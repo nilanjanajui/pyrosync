@@ -1,5 +1,5 @@
 import React from 'react';
-import { Flame, ExternalLink, HelpCircle, Download } from 'lucide-react';
+import { Flame, Layers, GitCompare, HelpCircle, Download, ExternalLink } from 'lucide-react';
 import type { Manifest, Harmonization } from '../../datasource/schema';
 import { useAppStore } from '../../store/appStore';
 
@@ -9,57 +9,84 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ manifest, harmonization }) => {
-  const { setIsHarmonizationModalOpen, setIsExportModalOpen } = useAppStore();
+  const {
+    sensorMode,
+    setSensorMode,
+    setIsHarmonizationModalOpen,
+    setIsExportModalOpen,
+  } = useAppStore();
 
   return (
-    <header className="bg-app-surface1/95 border-b border-app-border backdrop-blur-md sticky top-0 z-40 px-4 sm:px-6 py-2.5">
-      <div className="max-w-[1720px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
-        {/* Left Identity */}
+    <header className="sticky top-0 z-40 bg-app-bg/95 backdrop-blur-md border-b border-app-border px-4 py-3 lg:px-6 font-mono">
+      <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-3">
+        {/* Brand / Title */}
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-app-accent/30 to-app-accent/10 border border-app-accent/40 rounded-lg text-app-accent shadow-[0_0_15px_rgba(249,115,22,0.3)]">
-            <Flame className="w-5 h-5 animate-pulse" aria-hidden="true" />
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 via-orange-600 to-red-700 flex items-center justify-center shadow-lg shadow-orange-950/50 border border-amber-400/30 shrink-0">
+            <Flame className="w-5 h-5 text-white animate-pulse" aria-hidden="true" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black tracking-widest text-app-text font-mono uppercase">
-                PyroSync
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base sm:text-lg font-bold tracking-tight text-white font-mono">
+                PyroSync: Harmonized MODIS &amp; VIIRS Burning Activity Calendar
               </h1>
-              <span className="text-xs px-2 py-0.5 rounded bg-app-surface2 border border-app-border text-app-textMuted font-mono font-medium">
-                v{manifest.version}
-              </span>
-              <span className="hidden sm:inline-block text-[11px] px-2 py-0.5 rounded bg-sky-950/70 border border-sky-800/80 text-sky-400 font-mono tracking-wider font-semibold">
-                NASA SPACE APPS
+              <span className="px-2 py-0.5 text-[10px] font-mono font-semibold uppercase tracking-wider rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
+                NASA Space Apps 2026
               </span>
             </div>
-            <p className="text-xs text-app-textMuted font-medium tracking-tight">
-              California Burning Activity Observatory · <span className="text-app-textSubdued">Harmonized active-fire detection records</span>
+            <p className="text-xs text-app-textMuted hidden sm:block">
+              Cross-Sensor Thermal Anomaly Normalization (Terra/Aqua MODIS 1km + SNPP/NOAA-20 VIIRS 375m &bull; {manifest.coverage.start}–{manifest.coverage.end})
             </p>
           </div>
         </div>
 
-        {/* Right Badges & Tactical Actions */}
-        <div className="flex items-center gap-2 flex-wrap text-xs">
-          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded bg-app-surface2 border border-app-border text-app-textMuted font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span>CA · {manifest.coverage.start} → {manifest.coverage.end}</span>
+        {/* Global Action Controls */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap text-xs">
+          {/* Sensor Mode Switch */}
+          <div
+            className="bg-app-surface1 p-1 rounded-xl border border-app-border flex items-center"
+            role="group"
+            aria-label="Sensor Harmonization Mode"
+          >
+            <button
+              onClick={() => setSensorMode('harmonized')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                sensorMode === 'harmonized'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm font-bold'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Harmonized Index</span>
+            </button>
+            <button
+              onClick={() => setSensorMode(sensorMode === 'harmonized' ? 'viirs' : 'harmonized')}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all flex items-center gap-1.5 ${
+                sensorMode !== 'harmonized'
+                  ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/40 shadow-sm font-bold'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              <GitCompare className="w-3.5 h-3.5" />
+              <span>Raw Sensors</span>
+            </button>
           </div>
 
+          {/* Methodology Info Button */}
           <button
             onClick={() => setIsHarmonizationModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-app-surface2 hover:bg-app-elevated border border-app-border hover:border-app-borderLight text-app-text transition-all font-mono text-[11px] font-medium focus:ring-1 focus:ring-app-accent"
-            title="Inspect seasonal ratio models, Terra-only era math, and LOYO-CV validation"
+            className="px-3 py-2 rounded-xl bg-app-surface1 hover:bg-app-surface2 text-gray-200 text-xs font-medium border border-app-border transition flex items-center gap-1.5"
           >
-            <HelpCircle className="w-3.5 h-3.5 text-app-accent" aria-hidden="true" />
-            <span>Methodology</span>
-            <span className="text-[10px] text-app-textSubdued font-normal">({harmonization.status})</span>
+            <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden md:inline">Harmonization Methodology</span>
+            <span className="md:hidden">Method ({harmonization.status})</span>
           </button>
 
+          {/* Download CSV Button */}
           <button
             onClick={() => setIsExportModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-app-accent/20 hover:bg-app-accent/30 border border-app-accent/40 text-app-accent transition-all font-mono text-[11px] font-semibold focus:ring-1 focus:ring-app-accent"
-            title="Download CSV of current AOI detection time-series"
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black font-bold text-xs shadow-lg shadow-orange-950/40 transition flex items-center gap-1.5"
           >
-            <Download className="w-3.5 h-3.5" aria-hidden="true" />
+            <Download className="w-3.5 h-3.5 text-black" />
             <span>Export CSV</span>
           </button>
 
@@ -67,10 +94,10 @@ export const Header: React.FC<HeaderProps> = ({ manifest, harmonization }) => {
             href="https://github.com/nilanjanajui/pyrosync"
             target="_blank"
             rel="noopener noreferrer"
-            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded bg-app-surface2 hover:bg-app-elevated border border-app-border text-app-textMuted hover:text-app-text transition-colors font-mono text-[11px]"
+            className="hidden xl:inline-flex items-center gap-1 px-2.5 py-2 rounded-xl bg-app-surface1 hover:bg-app-surface2 border border-app-border text-app-textMuted hover:text-app-text transition-colors text-xs"
           >
             <span>GitHub</span>
-            <ExternalLink className="w-3 h-3 text-app-textSubdued" aria-hidden="true" />
+            <ExternalLink className="w-3 h-3 text-app-textSubdued" />
           </a>
         </div>
       </div>
