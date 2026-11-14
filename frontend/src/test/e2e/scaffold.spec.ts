@@ -7,14 +7,14 @@ test.describe('Milestone 0+1+2+3: Scaffold, Contract & UI Verification', () => {
     // Check for synthetic banner
     const banner = page.getByRole('alert', { name: 'Synthetic Data Warning' });
     await expect(banner).toBeVisible();
-    await expect(banner).toContainText('SYNTHETIC DATA');
+    await expect(banner).toContainText('SYNTHETIC DEMO DATA');
 
     // Check Header and Title
     await expect(page.getByRole('heading', { name: 'PyroSync' })).toBeVisible();
-    await expect(page.getByText('Coverage: 2000-11 to 2021-12', { exact: true })).toBeVisible();
+    await expect(page.getByText('Temporal Record')).toBeVisible();
 
     // Check map section heading is present
-    await expect(page.getByRole('heading', { name: /California 10 km Grid/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Spatial Activity/i })).toBeVisible();
 
     // Check calendar section is present
     await expect(page.getByRole('grid', { name: /Burn activity calendar/i })).toBeVisible();

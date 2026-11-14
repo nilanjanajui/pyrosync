@@ -55,3 +55,18 @@ This document records architectural, data, and design decisions made throughout 
   - Used PuOr diverging palette for the "vs. Median" anomaly view.
   - Distinguished predicted months (pre-2012-02) using CSS hatched overlays (`bg-hatched`) and dashed borders for the Terra-only era, ensuring differences are never communicated by color alone.
   - Highlighted 2012-02 blend boundary with a dedicated sky-blue border and 2012-01 with a partial-month marker.
+
+---
+
+## 2026-11-14 — Scientific Command Center UI Redesign
+
+### DEC-009: Scientific Command Center Visual Identity & 3D Tactical Perspective
+- **Context**: The user specified a complete design specification transforming the UI from a generic analytics dashboard to a **“scientific command center”** inspired by NASA mission software, oblique satellite reconnaissance telemetry, and high-density geospatial intelligence.
+- **Decision**:
+  - Implemented the deep-slate/near-black application shell with subtle elevation levels (`#0B1014` background, `#11181E` primary surface, `#151E25` secondary surface, `#1A252D` elevated surface, `#1E2B35` low-contrast cool gray borders, `#F0F4F8` primary text, `#8C9BAE` secondary text, `#5A6B7C` metadata).
+  - Implemented 3D oblique perspective camera (`pitch: 45°`, `bearing: -10°`) in `FireMap.tsx` with a `[3D Tactical]` / `[2D Plan]` camera toggle.
+  - Added tactical glowing perimeter layer for selected cells (`#F97316` glow blur) and violet isoline grid lines (`#a855f7` with 0.18 opacity) inspired by high-resolution wildfire reconnaissance displays.
+  - Added floating Tactical Heads-Up Display (HUD) overlay directly on the map canvas featuring a large telemetry index, bold title badge, live detection/cells/area readout, and an Inset California Mini-Map with live GPS coordinates.
+  - Formatted `BurnCalendar.tsx` as the central historical instrument (12 rows × 22 years) with sticky month/year navigation, non-color-dependent provenance language (solid fill, hatched predicted overlay, dashed Terra-only border, partial month badge, and sky-blue blend boundary divider), and unified activity/provenance legend.
+  - Built `MonthInspector.tsx` bottom dock featuring huge headline detection count metric, dedicated data provenance card with pre-2012 unvalidated warning, historical context statistics (median, ratio, percentile, rank, anomaly tag), and an asymmetrical typical error band visualizer.
+  - Added `HarmonizationModal.tsx` and `ExportModal.tsx` with comment-header CSV export.

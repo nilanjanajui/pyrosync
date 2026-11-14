@@ -9,13 +9,14 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background-color: #0f172a;
-  color: #f8fafc;
+  background-color: #0B1014;
+  color: #F0F4F8;
+  overflow-x: hidden;
 }
 
 /* Accessibility focus indicator */
 :focus-visible {
-  outline: 2px solid #f97316;
+  outline: 2px solid #F97316;
   outline-offset: 2px;
 }
 
@@ -32,15 +33,52 @@ body {
   border-width: 0;
 }
 
-/* No-data hatched pattern */
+/* Tabular numerals for scientific alignment */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Predicted data subtle diagonal hatch (45 deg) */
 .bg-hatched {
   background-image: repeating-linear-gradient(
     45deg,
-    rgba(148, 163, 184, 0.15),
-    rgba(148, 163, 184, 0.15) 4px,
-    transparent 4px,
-    transparent 8px
+    rgba(255, 255, 255, 0.18),
+    rgba(255, 255, 255, 0.18) 1.5px,
+    transparent 1.5px,
+    transparent 4px
   );
+}
+
+/* Missing / unoperated data pattern */
+.bg-missing-hatched {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(90, 107, 124, 0.25),
+    rgba(90, 107, 124, 0.25) 2px,
+    transparent 2px,
+    transparent 6px
+  );
+}
+
+/* 3D tactical HUD glowing perimeter effect */
+.fire-perimeter-glow {
+  box-shadow: 0 0 25px rgba(249, 115, 22, 0.45), inset 0 0 15px rgba(249, 115, 22, 0.25);
+}
+
+/* Custom scrollbars for data tables and calendar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B1014;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E2B35;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2C3E4C;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -51,4 +89,3 @@ body {
     scroll-behavior: auto !important;
   }
 }
-

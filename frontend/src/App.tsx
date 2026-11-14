@@ -3,12 +3,13 @@ import { loadDataset, type DatasetLoadError } from './datasource/load';
 import { SyntheticBanner } from './components/common/SyntheticBanner';
 import { ErrorScreen } from './components/common/ErrorScreen';
 import { Header } from './components/layout/Header';
+import { DatasetStatusStrip } from './components/layout/DatasetStatusStrip';
 import { Footer } from './components/layout/Footer';
 import { FireMap } from './components/map/FireMap';
-import { AoiControls } from './components/aoi/AoiControls';
 import { BurnCalendar } from './components/calendar/BurnCalendar';
-import { SensorToggle } from './components/calendar/SensorToggle';
-import { MonthDetailPanel } from './components/calendar/MonthDetailPanel';
+import { MonthInspector } from './components/inspector/MonthInspector';
+import { HarmonizationModal } from './components/modals/HarmonizationModal';
+import { ExportModal } from './components/modals/ExportModal';
 import { Flame } from 'lucide-react';
 import { useAppStore } from './store/appStore';
 import { snapCellsToAoi } from './domain/aoi';
@@ -17,9 +18,16 @@ export const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DatasetLoadError | null>(null);
 
-  const { dataset, setDataset, aoi, setSelectedCellIndexes, activeMonth } = useAppStore();
+  const {
+    dataset,
+    setDataset,
+    aoi,
+    setSelectedCellIndexes,
+    activeMonth,
+    liveAnnouncement,
+  } = useAppStore();
 
-  // Check URL query parameters for test dataset paths (e.g. ?dataset=malformed)
+  // Custom dataset path support (?dataset=malformed)
   const queryParams = new URLSearchParams(window.location.search);
   const customDataset = queryParams.get('dataset');
   const basePath = customDataset === 'malformed' ? '/datasets/malformed' : '/datasets';
@@ -30,7 +38,7 @@ export const App: React.FC = () => {
     try {
       const data = await loadDataset(basePath);
       setDataset(data);
-      // Initialize cell selection (state-wide = all cells)
+      // Initialize with statewide selection (all cells)
       setSelectedCellIndexes(data.grid.features.map((_, i) => i));
     } catch (err: unknown) {
       console.error('Failed to load dataset:', err);
@@ -44,7 +52,7 @@ export const App: React.FC = () => {
     loadData();
   }, [loadData]);
 
-  // Sync AOI → cell indexes whenever AOI changes after initial load
+  // Sync AOI changes with cell snapping
   useEffect(() => {
     if (!dataset) return;
     const indexes = snapCellsToAoi(aoi, dataset.grid.features);
@@ -53,12 +61,16 @@ export const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-100 p-4">
-        <div className="p-4 bg-orange-600/20 border border-orange-500/40 rounded-2xl mb-4 animate-bounce">
-          <Flame className="w-12 h-12 text-orange-500" aria-hidden="true" />
+      <div className="min-h-screen bg-app-bg flex flex-col items-center justify-center text-app-text p-4 font-mono">
+        <div className="p-4 bg-app-surface1 border border-app-accent/40 rounded-2xl mb-4 shadow-[0_0_25px_rgba(249,115,22,0.3)] animate-pulse">
+          <Flame className="w-10 h-10 text-app-accent" aria-hidden="true" />
         </div>
-        <h2 className="text-xl font-bold tracking-tight">Initializing PyroSync Engine...</h2>
-        <p className="text-sm text-slate-400 mt-1">Validating static data contract schemas &amp; building dense matrices</p>
+        <h2 className="text-sm font-bold tracking-widest uppercase">
+          Initializing PyroSync Tactical Engine...
+        </h2>
+        <p className="text-xs text-app-textSubdued mt-1">
+          Validating contract schemas &amp; constructing 22-year dense typed array matrices
+        </p>
       </div>
     );
   }
@@ -70,65 +82,70 @@ export const App: React.FC = () => {
   if (!dataset) return null;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Skip link for keyboard users */}
+    <div className="min-h-screen bg-app-bg text-app-text flex flex-col font-sans selection:bg-app-accent selection:text-white">
+      {/* Screen Reader Skip Link */}
       <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-orange-600 focus:text-white focus:rounded focus:text-sm focus:font-medium"
+        href="#main-workspace"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-app-accent focus:text-white focus:rounded focus:text-xs focus:font-mono focus:font-bold"
       >
-        Skip to main content
+        Skip to main analytical workspace
       </a>
 
-      {/* Persistent Synthetic Data Banner */}
+      {/* Screen Reader Polite Live Region (Section 71) */}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {liveAnnouncement}
+      </div>
+
+      {/* Persistent Synthetic Demo Banner (Disappears when real data loads) */}
       <SyntheticBanner isSynthetic={dataset.manifest.synthetic} />
 
-      {/* Main App Header */}
+      {/* Global Mission Control Header */}
       <Header manifest={dataset.manifest} harmonization={dataset.harmonization} />
 
-      {/* Main layout */}
-      <main id="main-content" className="flex-1 max-w-screen-2xl w-full mx-auto p-4 sm:p-5 space-y-5">
+      {/* Dataset Status Strip */}
+      <DatasetStatusStrip
+        manifest={dataset.manifest}
+        harmonization={dataset.harmonization}
+        numMonths={dataset.numMonths}
+      />
 
-        {/* Top section: Map + Controls */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5">
-          {/* Map */}
-          <section aria-labelledby="map-heading" className="space-y-2">
-            <h2 id="map-heading" className="text-sm font-semibold text-slate-300">
-              California 10 km Grid — Harmonized Fire Activity
-            </h2>
-            <div className="h-[420px] rounded-xl overflow-hidden border border-slate-800">
-              <FireMap dataset={dataset} />
-            </div>
-            <p className="text-xs text-slate-500">
-              Click a grid cell to set a 15 km radius AOI, or use the controls to the right for custom selection.
-              Choropleth shows cumulative harmonized VIIRS-equivalent detection records across all years.
-            </p>
+      {/* Primary Analytical Exploration Workspace (Map ~44% : Calendar ~56%) */}
+      <main
+        id="main-workspace"
+        className="flex-1 max-w-[1720px] w-full mx-auto p-4 sm:p-6 space-y-4"
+      >
+        {/* Top Split: 3D Tactical Map (Where?) + Burn Calendar (When?) */}
+        <div className="grid grid-cols-1 xl:grid-cols-[44%_56%] gap-4 items-start">
+          {/* Spatial Activity: 3D Oblique Grid Map & AOI Snapping */}
+          <section aria-label="Spatial Activity Exploration">
+            <FireMap dataset={dataset} />
           </section>
 
-          {/* Controls sidebar */}
-          <aside aria-label="Area of interest and sensor controls" className="space-y-4">
-            <AoiControls />
-            <SensorToggle harmonization={dataset.harmonization} />
-          </aside>
+          {/* Temporal Activity: 22-Year Burn Activity Calendar */}
+          <section aria-label="Temporal Activity Exploration">
+            <BurnCalendar />
+          </section>
         </div>
 
-        {/* Calendar + Detail panel */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-5">
-          <BurnCalendar />
-          {activeMonth ? (
-            <MonthDetailPanel />
-          ) : (
-            <div className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-5 flex items-center justify-center">
-              <p className="text-xs text-slate-500 text-center">
-                Click any calendar cell to see detailed statistics for that month.
-              </p>
-            </div>
-          )}
-        </div>
-
+        {/* Selected Month Scientific Inspection Dock (What does this number mean?) */}
+        {activeMonth && (
+          <div className="transition-all animate-fadeIn">
+            <MonthInspector />
+          </div>
+        )}
       </main>
 
-      {/* Persistent Footer */}
+      {/* Persistent Technical Footer */}
       <Footer manifest={dataset.manifest} />
+
+      {/* Interactive Modal Dialogs */}
+      <HarmonizationModal />
+      <ExportModal />
     </div>
   );
 };
