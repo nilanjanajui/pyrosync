@@ -90,7 +90,12 @@
       "type": "array",
       "items": { "type": "string" }
     },
-    "filters": { "type": "string" }
+    "filters": { "type": "string" },
+    "datasetHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hex digest over grid.geojson, boundary.geojson, cell_months.json, harmonization.json, validation.json (in that order). Written by `pyrosync export`; verified by `pyrosync check`."
+    }
   }
 }
 

@@ -16,7 +16,9 @@ validation.json     Tables exposed in "How it works" drawer
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -31,8 +33,40 @@ from shapely import wkb
 
 VERSION = "1.0.0"
 
+# Core files whose bytes define the dataset hash (order is canonical).
+CORE_FILES = [
+    "grid.geojson",
+    "boundary.geojson",
+    "cell_months.json",
+    "harmonization.json",
+    "validation.json",
+]
 
-def run_export(data_dir: Path, out_dir: Path) -> None:
+
+def compute_dataset_hash(out_dir: Path) -> str:
+    """SHA-256 over the concatenated raw bytes of CORE_FILES, in order.
+
+    Returns a 64-character lowercase hex string.  Raises FileNotFoundError if
+    any core file is absent (call only after all files have been written).
+    """
+    h = hashlib.sha256()
+    for name in CORE_FILES:
+        p = out_dir / name
+        if not p.exists():
+            raise FileNotFoundError(f"Core file missing for hashing: {p}")
+        h.update(p.read_bytes())
+    return h.hexdigest()
+
+
+def _bump_patch(version: str) -> str:
+    """Increment the patch component of a semver string, e.g. '1.0.0' → '1.0.1'."""
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(.*)", version)
+    if not m:
+        return version + ".1"
+    return f"{m.group(1)}.{m.group(2)}.{int(m.group(3)) + 1}{m.group(4)}"
+
+
+def run_export(data_dir: Path, out_dir: Path, version_override: str | None = None) -> None:
     """Execute the full ETL export pipeline."""
     data_dir = data_dir.resolve()
     out_dir = out_dir.resolve()
@@ -387,16 +421,49 @@ def run_export(data_dir: Path, out_dir: Path) -> None:
     print("    ✓ validation.json written")
 
     # ------------------------------------------------------------------
-    # 7. Build manifest.json
+    # 7. Build manifest.json  (hash + auto-version)
     # ------------------------------------------------------------------
     print("[7/7] Building manifest.json …")
 
     bounds = _grid_bounds(gdf_wgs)  # [minLon, minLat, maxLon, maxLat]
 
+    # --- Compute dataset hash over the 5 core files ---
+    new_hash = compute_dataset_hash(out_dir)
+
+    # --- Decide version ---
+    manifest_path = out_dir / "manifest.json"
+    if version_override:
+        chosen_version = version_override
+        print(f"    Version override: {chosen_version}")
+    else:
+        # Read previous manifest's hash and version (if it exists)
+        prev_hash: str | None = None
+        prev_version: str = VERSION
+        if manifest_path.exists():
+            try:
+                prev = json.loads(manifest_path.read_text(encoding="utf-8"))
+                prev_hash = prev.get("datasetHash")
+                prev_version = prev.get("version", VERSION)
+            except (json.JSONDecodeError, OSError):
+                pass  # treat as first run
+
+        if prev_hash is None or new_hash != prev_hash:
+            chosen_version = _bump_patch(prev_version)
+            if prev_hash is None:
+                print(f"    First export (no prior hash) → version {chosen_version}")
+            else:
+                print(
+                    f"    Data changed (hash mismatch) → bumping version {prev_version} → {chosen_version}"
+                )
+        else:
+            chosen_version = prev_version
+            print(f"    Data unchanged (hash match) → keeping version {chosen_version}")
+
     manifest: dict[str, Any] = {
-        "version": VERSION,
+        "version": chosen_version,
         "generatedAtUtc": datetime.now(UTC).isoformat(),
         "synthetic": False,
+        "datasetHash": new_hash,
         "studyArea": {
             "name": "California",
             "bbox": bounds,
@@ -432,8 +499,8 @@ def run_export(data_dir: Path, out_dir: Path) -> None:
         "filters": "Presumed vegetation fires (type == 0).",
     }
 
-    _write_json(out_dir / "manifest.json", manifest)
-    print("    ✓ manifest.json written")
+    _write_json(manifest_path, manifest)
+    print(f"    ✓ manifest.json written  (datasetHash: {new_hash[:16]}…)")
 
     # ------------------------------------------------------------------
     # Summary

@@ -8,7 +8,7 @@ from pathlib import Path
 import jsonschema
 
 from pyrosync.budget import check_dataset_budgets
-from pyrosync.export import run_export
+from pyrosync.export import CORE_FILES, compute_dataset_hash, run_export
 from pyrosync.synth import generate_synthetic_dataset
 
 SCHEMA_DIR = Path(__file__).parent / "schemas"
@@ -111,6 +111,35 @@ def cmd_check(args: argparse.Namespace) -> int:
                 f"\nHarmonization density: {dense_count:,} non-zero records ({density_pct:.1f}% of {total_possible:,} cell-months)"
             )
 
+    # Verify datasetHash integrity
+    manifest_path = data_dir / "manifest.json"
+    if manifest_path.exists():
+        try:
+            manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            stored_hash = manifest_data.get("datasetHash")
+            if stored_hash is None:
+                print(
+                    "\n  [SKIP] manifest.datasetHash absent "
+                    "(legacy dataset — re-run `pyrosync export` to add it)"
+                )
+            else:
+                try:
+                    actual_hash = compute_dataset_hash(data_dir)
+                    if actual_hash == stored_hash:
+                        print(f"\n  [PASS] datasetHash matches ({stored_hash[:16]}…)")
+                    else:
+                        errors.append(
+                            f"datasetHash mismatch:\n"
+                            f"    stored:     {stored_hash}\n"
+                            f"    recomputed: {actual_hash}\n"
+                            f"  One or more of {CORE_FILES} was edited without\n"
+                            f"  re-running `pyrosync export`. Re-run export to fix."
+                        )
+                except FileNotFoundError as exc:
+                    errors.append(f"Cannot verify datasetHash: {exc}")
+        except (json.JSONDecodeError, OSError) as exc:
+            errors.append(f"Cannot read manifest for hash check: {exc}")
+
     if errors or not budget_passed:
         print("\nCHECK FAILED:")
         for err in errors:
@@ -125,8 +154,9 @@ def cmd_export(args: argparse.Namespace) -> int:
     """ETL export — read real Parquet/CSV inputs and write frontend datasets."""
     data_dir = Path(args.data).resolve()
     out_dir = Path(args.out).resolve()
+    version_override: str | None = getattr(args, "version", None)
     try:
-        run_export(data_dir, out_dir)
+        run_export(data_dir, out_dir, version_override=version_override)
         return 0
     except Exception as exc:
         print(f"Export failed: {exc}", file=sys.stderr)
@@ -158,6 +188,12 @@ def main() -> None:
         help="Root data directory (contains aggregated/, harmonization/, product/, boundaries/)",
     )
     p_export.add_argument("--out", default="../frontend/public/datasets")
+    p_export.add_argument(
+        "--version",
+        default=None,
+        metavar="X.Y.Z",
+        help="Override the manifest version string instead of auto-incrementing",
+    )
     p_export.set_defaults(func=cmd_export)
 
     args = parser.parse_args()

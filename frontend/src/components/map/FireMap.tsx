@@ -155,7 +155,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
 
   const [activeRegion, setActiveRegion] = useState<RegionKey>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('glow');
-  const [mapLayer, setMapLayer] = useState<MapLayerMode>('dark');
+  const [mapLayer, setMapLayer] = useState<MapLayerMode>('satellite');
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<[number, number] | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);

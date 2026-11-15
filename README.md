@@ -65,6 +65,12 @@ npm run test:e2e
 
 ---
 
+## Updating the Dataset
+
+When new pipeline outputs are available, follow the steps in **[docs/UPDATING_DATA.md](docs/UPDATING_DATA.md)** to safely regenerate, verify, and deploy the dataset. The pipeline enforces a content hash (`datasetHash` in `manifest.json`) that auto-bumps the cache-busting version and prevents silent data drift.
+
+---
+
 ## Dataset Limitations & Caveats
 1. **Coverage Boundary**: The historical dataset ends at **December 2021** (`2021-12`). PyroSync never presents historical records as real-time or current.
 2. **Detection Semantics**: Satellite active-fire observations represent thermal anomaly detection records during satellite overpass, not counts of individual or unique wildfires.
