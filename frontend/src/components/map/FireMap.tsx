@@ -20,6 +20,10 @@ import {
   Moon,
   Radio,
   Sparkles,
+  Box,
+  FastForward,
+  Video,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { getEra } from '../../domain/era';
 import { isPredictedMonth } from '../../domain/aggregate';
@@ -32,6 +36,64 @@ interface FireMapProps {
 
 type ViewMode = 'glow' | 'grid';
 type MapLayerMode = 'dark' | 'satellite';
+
+interface MegafireBookmark {
+  id: string;
+  name: string;
+  yearMonth: string;
+  yearLabel: string;
+  center: [number, number]; // [lon, lat]
+  radiusKm: number;
+  description: string;
+}
+
+const MEGAFIRE_BOOKMARKS: MegafireBookmark[] = [
+  {
+    id: 'august-complex',
+    name: 'August Complex',
+    yearMonth: '2020-08',
+    yearLabel: 'Aug 2020',
+    center: [-122.95, 39.92],
+    radiusKm: 45,
+    description: 'Largest wildfire complex in modern California history (1M+ acres)',
+  },
+  {
+    id: 'camp-fire',
+    name: 'Camp Fire',
+    yearMonth: '2018-11',
+    yearLabel: 'Nov 2018',
+    center: [-121.62, 39.76],
+    radiusKm: 30,
+    description: 'Most destructive wildfire in California (Paradise)',
+  },
+  {
+    id: 'dixie-fire',
+    name: 'Dixie Fire',
+    yearMonth: '2021-08',
+    yearLabel: 'Aug 2021',
+    center: [-121.32, 40.05],
+    radiusKm: 45,
+    description: 'Largest single wildfire in recorded state history (963k acres)',
+  },
+  {
+    id: 'thomas-fire',
+    name: 'Thomas Fire',
+    yearMonth: '2017-12',
+    yearLabel: 'Dec 2017',
+    center: [-119.25, 34.42],
+    radiusKm: 35,
+    description: 'Massive wind-driven coastal wildfire in Ventura & Santa Barbara',
+  },
+  {
+    id: 'tubbs-fire',
+    name: 'Tubbs Fire',
+    yearMonth: '2017-10',
+    yearLabel: 'Oct 2017',
+    center: [-122.70, 38.52],
+    radiusKm: 30,
+    description: 'Catastrophic wind-driven wildfire across Napa & Sonoma',
+  },
+];
 
 /** Register crisp fire emoji icon in MapLibre's sprite registry */
 function registerFireEmoji(map: maplibregl.Map) {
@@ -99,6 +161,12 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [basemapFailed, setBasemapFailed] = useState(false);
   const [searchedPlaceName, setSearchedPlaceName] = useState<string | null>(null);
+  const [is3D, setIs3D] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<1 | 2 | 4>(1);
+  const [isComparingSensors, setIsComparingSensors] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordProgress, setRecordProgress] = useState('');
+  const [activeBookmark, setActiveBookmark] = useState<string | null>(null);
   const cellCountsRef = useRef<Float32Array>(new Float32Array(0));
   const sensorModeRef = useRef(sensorMode);
   sensorModeRef.current = sensorMode;
@@ -746,15 +814,125 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     };
   }, [isDrawing, drawStart, setAoi]);
 
-  // Timeline playback loop
+  // Simultaneous MODIS vs VIIRS comparison stats for active month & AOI
+  const comparisonStats = useMemo(() => {
+    if (dataset.months[mIdx] < '2012-02') return null;
+    const offset = mIdx * dataset.numCells;
+    let modisSum = 0;
+    let viirsSum = 0;
+    const matched = snapCellsToAoi(aoi, dataset.grid.features);
+    const set = new Set(matched);
+    const isFiltered = aoi.mode !== 'state';
+
+    for (let c = 0; c < dataset.numCells; c++) {
+      if (!isFiltered || set.has(c)) {
+        modisSum += dataset.modisTotal[offset + c] || 0;
+        viirsSum += dataset.viirsTotal[offset + c] || 0;
+      }
+    }
+
+    const ratio = modisSum > 0 ? (viirsSum / modisSum).toFixed(1) : null;
+    return { modisSum, viirsSum, ratio };
+  }, [dataset, mIdx, aoi]);
+
+  // Handle megafire bookmark jump
+  const handleSelectBookmark = (bm: MegafireBookmark) => {
+    setActiveBookmark(bm.id);
+    setActiveMonth(bm.yearMonth);
+    setAoi({ mode: 'radius', center: bm.center, radiusKm: bm.radiusKm });
+    setActiveRegion('draw');
+    setSearchedPlaceName(bm.name);
+
+    const map = mapRef.current;
+    if (map) {
+      map.flyTo({
+        center: bm.center,
+        zoom: 8.5,
+        pitch: is3D ? 58 : 0,
+        essential: true,
+        duration: 1200,
+      });
+
+      const pinSource = map.getSource('search-pin') as maplibregl.GeoJSONSource | undefined;
+      if (pinSource) {
+        pinSource.setData({
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: bm.center },
+              properties: { name: bm.name },
+            },
+          ],
+        });
+      }
+    }
+  };
+
+  // Record canvas video animation
+  const handleRecordAnimation = async () => {
+    const map = mapRef.current;
+    if (!map || isRecording) return;
+
+    try {
+      setIsRecording(true);
+      const activeYear = dataset.months[mIdx].split('-')[0];
+      const yearMonths = dataset.months.filter((m) => m.startsWith(activeYear));
+      if (yearMonths.length === 0) return;
+
+      const canvas = map.getCanvas();
+      const stream = canvas.captureStream(30);
+      const mimeType =
+        typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : 'video/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pyrosync_fire_animation_${activeYear}.webm`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setIsRecording(false);
+        setRecordProgress('');
+      };
+
+      recorder.start();
+
+      for (let i = 0; i < yearMonths.length; i++) {
+        setRecordProgress(`${i + 1}/${yearMonths.length}`);
+        setActiveMonth(yearMonths[i]);
+        await new Promise((r) => setTimeout(r, 450));
+      }
+
+      await new Promise((r) => setTimeout(r, 300));
+      recorder.stop();
+    } catch {
+      setIsRecording(false);
+      setRecordProgress('');
+    }
+  };
+
+  // Timeline playback loop with adjustable speed
   useEffect(() => {
     if (!isPlaying) return;
+    const speedIntervalMs = playbackSpeed === 4 ? 160 : playbackSpeed === 2 ? 380 : 750;
     const interval = setInterval(() => {
       const nextIdx = (mIdx + 1) % dataset.numMonths;
       setActiveMonth(dataset.months[nextIdx]);
-    }, 600);
+    }, speedIntervalMs);
     return () => clearInterval(interval);
-  }, [isPlaying, mIdx, dataset, setActiveMonth]);
+  }, [isPlaying, mIdx, dataset, setActiveMonth, playbackSpeed]);
 
   const activeDateObj = new Date(`${dataset.months[mIdx]}-01T00:00:00Z`);
   const activeMonthNameYear = activeDateObj.toLocaleString('en-US', {
@@ -829,6 +1007,33 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
               </button>
             </div>
 
+            {/* Feature 2: 3D Terrain Pitch / Elevation Tilt Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !is3D;
+                setIs3D(next);
+                const map = mapRef.current;
+                if (map) {
+                  if (next) {
+                    map.easeTo({ pitch: 58, bearing: -16, duration: 1000 });
+                  } else {
+                    map.easeTo({ pitch: 0, bearing: 0, duration: 800 });
+                  }
+                }
+              }}
+              aria-pressed={is3D}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg border transition-all min-h-[38px] ${
+                is3D
+                  ? 'bg-amber-500 text-black border-amber-400 font-bold shadow-sm'
+                  : 'bg-app-surface1 text-gray-300 hover:text-white border-app-border hover:bg-app-elevated'
+              }`}
+              title="Toggle 3D perspective pitch tilt"
+            >
+              <Box className="w-3.5 h-3.5" />
+              <span>{is3D ? copy.map.view2D : copy.map.view3D}</span>
+            </button>
+
             {/* Quick jump to August 2020 peak */}
             <button
               type="button"
@@ -886,6 +1091,39 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
             </div>
           )}
         </div>
+
+        {/* Feature 1: Megafire Incident Bookmarks Row */}
+        <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-app-border/40 text-xs">
+          <span className="font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1 text-[11px] mr-1">
+            <span>🔥</span>
+            <span>{copy.map.bookmarksLabel}:</span>
+          </span>
+          {MEGAFIRE_BOOKMARKS.map((bm) => {
+            const isActive = activeBookmark === bm.id;
+            return (
+              <button
+                key={bm.id}
+                type="button"
+                onClick={() => handleSelectBookmark(bm)}
+                className={`px-2.5 py-1 text-xs rounded-md border transition-all flex items-center gap-1.5 min-h-[34px] ${
+                  isActive
+                    ? 'bg-amber-500 text-black border-amber-400 font-bold shadow-sm'
+                    : 'bg-app-surface1 hover:bg-app-elevated border-app-border text-gray-200 hover:text-white'
+                }`}
+                title={bm.description}
+              >
+                <span>{bm.name}</span>
+                <span
+                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${
+                    isActive ? 'bg-black/20 text-black font-semibold' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  }`}
+                >
+                  {bm.yearLabel}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* 2. Map Canvas (Left 65% Main Exploration) */}
@@ -936,6 +1174,50 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
             <span>{copy.map.legendSelectedAoi}</span>
           </div>
         </div>
+
+        {/* Feature 4: Floating Sensor Comparison Card */}
+        {isComparingSensors && comparisonStats && (
+          <div className="absolute top-4 right-4 z-10 bg-app-surface1/95 backdrop-blur-md border border-amber-500/50 rounded-xl p-3.5 shadow-2xl text-xs font-sans max-w-xs space-y-2.5 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-app-border/80 pb-2">
+              <div className="flex items-center gap-1.5 font-bold text-white">
+                <ArrowRightLeft className="w-4 h-4 text-amber-400" />
+                <span>Sensor Resolution Comparison</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsComparingSensors(false)}
+                className="text-gray-400 hover:text-white p-0.5 rounded"
+                aria-label="Close comparison"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-center">
+              <div className="bg-app-surface2/80 p-2 rounded-lg border border-app-border">
+                <div className="text-[10px] text-gray-400 uppercase font-semibold">MODIS 1 km</div>
+                <div className="text-base font-extrabold text-amber-400 font-mono mt-0.5">
+                  {comparisonStats.modisSum.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-gray-400">Detections</div>
+              </div>
+
+              <div className="bg-app-surface2/80 p-2 rounded-lg border border-app-border">
+                <div className="text-[10px] text-emerald-400 uppercase font-semibold">VIIRS 375 m</div>
+                <div className="text-base font-extrabold text-emerald-300 font-mono mt-0.5">
+                  {comparisonStats.viirsSum.toLocaleString()}
+                </div>
+                <div className="text-[10px] text-gray-400">Detections</div>
+              </div>
+            </div>
+
+            {comparisonStats.ratio && (
+              <div className="bg-amber-500/10 border border-amber-500/30 p-2 rounded-lg text-[11px] text-amber-200">
+                <span className="font-bold text-amber-400">{comparisonStats.ratio}×</span> more fire detections resolved by modern VIIRS due to sharper 375 m pixel sensitivity.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 3. Month Slider with Play/Pause & Satellite Era Boundary */}
@@ -976,21 +1258,52 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
               <ChevronRight className="w-4 h-4" />
             </button>
 
+            {/* Feature 3: Playback Speed Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                setPlaybackSpeed((prev) => (prev === 1 ? 2 : prev === 2 ? 4 : 1));
+              }}
+              className="px-2.5 py-1 text-xs font-mono font-bold rounded-lg bg-app-surface2 hover:bg-app-elevated border border-app-border text-amber-300 transition-colors min-h-[32px] flex items-center gap-1 shadow-sm"
+              title="Change timeline playback speed"
+            >
+              <FastForward className="w-3.5 h-3.5 text-amber-400" />
+              <span>{copy.map.speedLabel(playbackSpeed)}</span>
+            </button>
+
             <span className="text-base font-bold text-white ml-2 tracking-tight">
               {activeMonthNameYear}
             </span>
           </div>
 
-          {/* Era Indicator Badge */}
-          <span
-            className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-              isEstimated
-                ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
-                : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
-            }`}
-          >
-            {isEstimated ? copy.map.sliderEstimated : copy.map.sliderMeasured}
-          </span>
+          <div className="flex items-center gap-2">
+            {/* Feature 5: Record Animation Video Clip */}
+            <button
+              type="button"
+              onClick={handleRecordAnimation}
+              disabled={isRecording}
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all min-h-[32px] ${
+                isRecording
+                  ? 'bg-red-500 text-white animate-pulse border-red-400 font-bold'
+                  : 'bg-app-surface2 hover:bg-app-elevated border-app-border text-gray-200 hover:text-white'
+              }`}
+              title="Record full-year fire progression video animation"
+            >
+              <Video className="w-3.5 h-3.5 text-amber-400" />
+              <span>{isRecording ? recordProgress || copy.map.recordingAnimation : copy.map.recordAnimation}</span>
+            </button>
+
+            {/* Era Indicator Badge */}
+            <span
+              className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                isEstimated
+                  ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                  : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+              }`}
+            >
+              {isEstimated ? copy.map.sliderEstimated : copy.map.sliderMeasured}
+            </span>
+          </div>
         </div>
 
         {/* Range Slider Track */}
@@ -1087,6 +1400,22 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
               </span>
             </button>
           </div>
+
+          {/* Feature 4: Sensor Comparison Mode Toggle */}
+          <button
+            type="button"
+            onClick={() => setIsComparingSensors(!isComparingSensors)}
+            aria-pressed={isComparingSensors}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all min-h-[38px] ${
+              isComparingSensors
+                ? 'bg-amber-500 text-black border-amber-400 font-bold shadow-sm'
+                : 'bg-app-surface1 text-gray-300 hover:text-white border-app-border hover:bg-app-elevated'
+            }`}
+            title="Compare simultaneous MODIS 1 km and VIIRS 375 m detections"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+            <span>{copy.map.compareSensors}</span>
+          </button>
         </div>
 
         <div className="text-[11px] text-app-textMuted hidden sm:flex items-center gap-1.5">

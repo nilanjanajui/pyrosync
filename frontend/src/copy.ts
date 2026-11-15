@@ -62,6 +62,13 @@ export const copy = {
     sensorViirs: 'VIIRS',
     sensorViirsYears: 'from 2012',
     sensorViirsDesc: 'Direct 375 m Suomi-NPP VIIRS observations (available from Feb 2012)',
+    view3D: '3D Tilt',
+    view2D: '2D Flat',
+    speedLabel: (s: number) => `${s}x Speed`,
+    bookmarksLabel: 'Notable Megafires',
+    compareSensors: 'Sensor Comparison',
+    recordAnimation: 'Record Video Clip',
+    recordingAnimation: 'Recording frames...',
   },
 
   summary: {
