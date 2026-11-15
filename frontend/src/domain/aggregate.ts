@@ -1,3 +1,4 @@
+import { getEra } from './era';
 /**
  * Monthly aggregation and time-series computation from dense matrices.
  * All counts are VIIRS-equivalent active-fire detection records — never "fires".
@@ -98,21 +99,20 @@ export function aoiSeries(
   return { months, values, sources, cellCounts, sensor };
 }
 
-/** Returns true if the month is in the VIIRS partial window (2012-01) */
+/** True for months VIIRS only partly covers (from the dataset manifest). */
 export function isPartialViirsMonth(month: string): boolean {
-  return month === '2012-01';
+  return getEra().partialMonths.includes(month);
 }
 
-/** Returns true if the month is in the Terra-only era (before 2002-07) */
+/** True for months before Aqua data exists (Terra-only era). */
 export function isTerraOnlyMonth(month: string): boolean {
-  const [y, m] = month.split('-').map(Number);
-  return y < 2002 || (y === 2002 && m < 7);
+  const aqua = getEra().firstAquaMonth;
+  return aqua !== null && month < aqua;
 }
 
-/** Returns true if the month is in the predicted (pre-VIIRS blend) era */
+/** True for months estimated from MODIS, i.e. before the first complete VIIRS month. */
 export function isPredictedMonth(month: string): boolean {
-  const [y, m] = month.split('-').map(Number);
-  return y < 2012 || (y === 2012 && m < 2);
+  return month < getEra().blendStart;
 }
 
 /** Label a source code as a human-readable string */

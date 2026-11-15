@@ -37,9 +37,9 @@ export interface AppState {
   activeMonth: string | null;
   setActiveMonth: (month: string | null) => void;
 
-  // Map 3D Perspective Mode (true = 45° oblique tactical drone view, false = 2D nadir plan view)
-  is3dPerspective: boolean;
-  setIs3dPerspective: (is3d: boolean) => void;
+  // Ask the map to zoom to a box (set by the coordinate form)
+  fitRequest: { bbox: [number, number, number, number]; id: number } | null;
+  requestFit: (bbox: [number, number, number, number]) => void;
 
   // Modals & Drawers
   isHarmonizationModalOpen: boolean;
@@ -71,15 +71,15 @@ export const useAppStore = create<AppState>((set) => ({
   calendarMode: 'counts',
   setCalendarMode: (mode) => set({ calendarMode: mode }),
 
-  dateStart: '2000-11',
-  dateEnd: '2021-12',
+  dateStart: '',
+  dateEnd: '',
   setDateRange: (start, end) => set({ dateStart: start, dateEnd: end }),
 
-  activeMonth: '2020-08', // Default to a prominent historical peak month
+  activeMonth: null, // set to the busiest month when a dataset loads
   setActiveMonth: (month) => set({ activeMonth: month }),
 
-  is3dPerspective: true, // Default to stunning 3D tactical perspective
-  setIs3dPerspective: (is3d) => set({ is3dPerspective: is3d }),
+  fitRequest: null,
+  requestFit: (bbox) => set((st) => ({ fitRequest: { bbox, id: (st.fitRequest?.id ?? 0) + 1 } })),
 
   isHarmonizationModalOpen: false,
   setIsHarmonizationModalOpen: (open) => set({ isHarmonizationModalOpen: open }),

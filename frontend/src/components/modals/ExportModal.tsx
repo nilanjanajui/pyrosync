@@ -3,6 +3,7 @@ import { X, Download, FileText, CheckCircle2 } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import { aoiSeries, sourceLabel } from '../../domain/aggregate';
 import { estimateAoiAreaKm2 } from '../../domain/aoi';
+import { slug, studyGeometry, studyName } from '../../domain/study';
 
 export const ExportModal: React.FC = () => {
   const {
@@ -12,17 +13,28 @@ export const ExportModal: React.FC = () => {
     selectedCellIndexes,
     sensorMode,
     aoi,
+    dateStart,
+    dateEnd,
   } = useAppStore();
 
   if (!isExportModalOpen || !dataset) return null;
 
-  const series = aoiSeries(dataset, selectedCellIndexes, sensorMode);
-  const aoiArea = estimateAoiAreaKm2(aoi);
+  const full = aoiSeries(dataset, selectedCellIndexes, sensorMode);
+  const keep = full.months.map((m, i) => (m >= dateStart && m <= dateEnd ? i : -1)).filter((i) => i >= 0);
+  const series = {
+    months: keep.map((i) => full.months[i]),
+    values: keep.map((i) => full.values[i]),
+    sources: keep.map((i) => full.sources[i]),
+    cellCounts: keep.map((i) => full.cellCounts[i]),
+  };
+  const aoiArea = estimateAoiAreaKm2(aoi, studyGeometry(dataset));
+  const area = studyName(dataset);
 
   const handleDownload = () => {
     // Generate CSV content with comment header
     const headers = [
-      '# PyroSync — California Fire Activity Observatory Data Export',
+      `# PyroSync fire activity export: ${area}`,
+      ...(dataset.manifest.synthetic ? ['# DEMO DATA: simulated test data. Not for operational use.'] : []),
       `# Generated UTC: ${new Date().toISOString()}`,
       `# Study Area: ${dataset.manifest.studyArea.name} (${selectedCellIndexes.length} cells, ≈${Math.round(aoiArea).toLocaleString()} km²)`,
       `# AOI Mode: ${aoi.mode}`,
@@ -44,9 +56,10 @@ export const ExportModal: React.FC = () => {
       const lo5 = sIdx >= 0 ? stateUncertainty.lo5[sIdx] : 0.75;
       const hi95 = sIdx >= 0 ? stateUncertainty.hi95[sIdx] : 1.35;
 
+      // Measured months (source 0) carry no error band; only estimated months do.
       const valStr = isNaN(val) ? '' : val.toFixed(1);
-      const loStr = isNaN(val) ? '' : (val * lo5).toFixed(1);
-      const hiStr = isNaN(val) ? '' : (val * hi95).toFixed(1);
+      const loStr = isNaN(val) ? '' : (src === 0 ? val : val * lo5).toFixed(1);
+      const hiStr = isNaN(val) ? '' : (src === 0 ? val : val * hi95).toFixed(1);
 
       return `${m},${valStr},${loStr},${hiStr},${src},"${sourceLabel(src)}",${series.cellCounts[i]}`;
     });
@@ -56,7 +69,7 @@ export const ExportModal: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `pyrosync_${sensorMode}_aoi_${series.months[0]}_to_${series.months[series.months.length - 1]}.csv`);
+    link.setAttribute('download', `pyrosync_${slug(area)}_${sensorMode}_${series.months[0]}_to_${series.months[series.months.length - 1]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -72,7 +85,7 @@ export const ExportModal: React.FC = () => {
       aria-labelledby="export-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
     >
-      <div className="bg-app-surface1 border border-app-borderLight rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-5 font-mono">
+      <div className="bg-app-surface1 border border-app-borderLight rounded-xl max-w-lg w-full p-6 shadow-2xl space-y-5 ">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-app-border pb-3">
           <div className="flex items-center gap-2">

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { X, HelpCircle, ChevronDown, ChevronRight, Sliders } from 'lucide-react';
 import { useAppStore } from '../../store/appStore';
 import type { SensorMode } from '../../domain/aggregate';
+import { studyName, monthLabel } from '../../domain/study';
+import { getEra } from '../../domain/era';
 import copy from '../../copy';
 
 export const HowItWorksDrawer: React.FC = () => {
@@ -10,34 +12,19 @@ export const HowItWorksDrawer: React.FC = () => {
     setIsHarmonizationModalOpen,
     sensorMode,
     setSensorMode,
-    setAoi,
     dataset,
   } = useAppStore();
 
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
-  const [lat, setLat] = useState('37.2');
-  const [lon, setLon] = useState('-119.5');
-  const [rad, setRad] = useState('150');
-
   if (!isHarmonizationModalOpen) return null;
 
-  const handleApplyCoords = (e: React.FormEvent) => {
-    e.preventDefault();
-    const parsedLat = parseFloat(lat);
-    const parsedLon = parseFloat(lon);
-    const parsedRad = Math.max(20, Math.min(1000, parseFloat(rad) || 100));
-
-    if (!isNaN(parsedLat) && !isNaN(parsedLon)) {
-      setAoi({
-        mode: 'radius',
-        center: [parsedLon, parsedLat],
-        radiusKm: parsedRad,
-      });
-      setIsHarmonizationModalOpen(false);
-    }
-  };
-
   const validation = dataset?.harmonization?.validation;
+  const area = dataset ? studyName(dataset) : 'the study area';
+  const startYear = dataset?.manifest.coverage.start.slice(0, 4) ?? '2000';
+  const years = dataset ? Number(dataset.manifest.coverage.end.slice(0, 4)) - Number(startYear) + 1 : 22;
+  const blendLabel = monthLabel(getEra().blendStart, 'long');
+  const viirsYear = getEra().blendStart.slice(0, 4);
+  const errPct = Math.round((validation?.wape ?? 0.13) * 100);
 
   return (
     <div
@@ -72,7 +59,7 @@ export const HowItWorksDrawer: React.FC = () => {
               1. {copy.drawer.paragraph1Title}
             </h3>
             <p className="text-gray-300 text-xs sm:text-sm">
-              {copy.drawer.paragraph1}
+              {copy.drawer.paragraph1(area)}
             </p>
           </div>
 
@@ -81,7 +68,7 @@ export const HowItWorksDrawer: React.FC = () => {
               2. {copy.drawer.paragraph2Title}
             </h3>
             <p className="text-gray-300 text-xs sm:text-sm">
-              {copy.drawer.paragraph2}
+              {copy.drawer.paragraph2(startYear, years, viirsYear)}
             </p>
           </div>
 
@@ -90,7 +77,7 @@ export const HowItWorksDrawer: React.FC = () => {
               3. {copy.drawer.paragraph3Title}
             </h3>
             <p className="text-gray-300 text-xs sm:text-sm">
-              {copy.drawer.paragraph3}
+              {copy.drawer.paragraph3(area, errPct, blendLabel)}
             </p>
           </div>
         </div>
@@ -107,11 +94,11 @@ export const HowItWorksDrawer: React.FC = () => {
             </div>
             <div>
               <dt className="font-bold text-white inline">{copy.drawer.glossaryEstimatedTitle}: </dt>
-              <dd className="inline text-gray-300">{copy.drawer.glossaryEstimatedDef}</dd>
+              <dd className="inline text-gray-300">{copy.drawer.glossaryEstimatedDef(blendLabel)}</dd>
             </div>
             <div>
               <dt className="font-bold text-white inline">{copy.drawer.glossaryMeasuredTitle}: </dt>
-              <dd className="inline text-gray-300">{copy.drawer.glossaryMeasuredDef}</dd>
+              <dd className="inline text-gray-300">{copy.drawer.glossaryMeasuredDef(blendLabel)}</dd>
             </div>
           </dl>
         </div>
@@ -163,54 +150,11 @@ export const HowItWorksDrawer: React.FC = () => {
                 </div>
               </div>
 
-              {/* Coordinate Inputs Form */}
-              <form onSubmit={handleApplyCoords} className="space-y-2 pt-2 border-t border-app-border/80">
-                <span className="font-bold text-gray-200 block">Custom Coordinate Inspection:</span>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-400 font-mono">Lat:</span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={lat}
-                      onChange={(e) => setLat(e.target.value)}
-                      className="w-16 bg-app-surface2 border border-app-border rounded px-1.5 py-1 text-white font-mono"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-400 font-mono">Lon:</span>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={lon}
-                      onChange={(e) => setLon(e.target.value)}
-                      className="w-16 bg-app-surface2 border border-app-border rounded px-1.5 py-1 text-white font-mono"
-                    />
-                  </label>
-                  <label className="flex items-center gap-1">
-                    <span className="text-gray-400 font-mono">Radius(km):</span>
-                    <input
-                      type="number"
-                      step="10"
-                      value={rad}
-                      onChange={(e) => setRad(e.target.value)}
-                      className="w-16 bg-app-surface2 border border-app-border rounded px-1.5 py-1 text-white font-mono"
-                    />
-                  </label>
-                  <button
-                    type="submit"
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded"
-                  >
-                    Apply Area
-                  </button>
-                </div>
-              </form>
-
               {/* Statistical Validation Data */}
               {validation && (
-                <div className="pt-2 border-t border-app-border/80 text-[11px] font-mono text-gray-400 space-y-1">
+                <div className="pt-2 border-t border-app-border/80 text-[11px] tabular-nums text-gray-400 space-y-1">
                   <div>Cross-Validation Regional Accuracy: {(validation.wape * 100).toFixed(1)}% typical error</div>
-                  <div>Pre-Aqua (2000–2002) Accuracy: {(validation.wapeTerraOnly * 100).toFixed(1)}% typical error</div>
+                  <div>Terra-only period (before Aqua) accuracy: {(validation.wapeTerraOnly * 100).toFixed(1)}% typical error</div>
                 </div>
               )}
             </div>

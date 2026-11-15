@@ -5,26 +5,17 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
   test('passes visual, plain-language, and accessibility acceptance', async ({ page }) => {
     await page.goto('/');
 
-    // 1. Synthetic banner is visible in normal flow and does NOT overlap header
-    const banner = page.getByRole('alert', { name: 'Synthetic Data Warning' });
-    await expect(banner).toBeVisible();
-    await expect(banner).toContainText('DEMO DATA');
-
+    // 1. Demo-data marker is visible near the numbers, but NOT in the top navigation bar
     const header = page.getByRole('banner');
     await expect(header).toBeVisible();
-
-    const bannerBox = await banner.boundingBox();
-    const headerBox = await header.boundingBox();
-    expect(bannerBox).not.toBeNull();
-    expect(headerBox).not.toBeNull();
-    if (bannerBox && headerBox) {
-      // Banner must be above or at the top of header in normal page flow
-      expect(bannerBox.y + bannerBox.height).toBeLessThanOrEqual(headerBox.y + 2);
-    }
+    await expect(header).not.toContainText(/demo/i);
+    await expect(page.getByRole('note', { name: /Demo data/i }).first()).toBeVisible();
+    await expect(page.getByRole('alert', { name: 'Synthetic Data Warning' })).toHaveCount(0);
 
     // 2. Header title & one-line description
     await expect(page.getByRole('heading', { name: 'PyroSync' })).toBeVisible();
-    await expect(page.getByText('California wildfire activity from satellites, 2000–2021')).toBeVisible();
+    await expect(page.getByText('California · wildfire activity seen from satellites')).toBeVisible();
+    await expect(header).toContainText('2000-11 to 2021-12');
 
     // 3. Region chips above the map
     await expect(page.getByRole('button', { name: 'All California' })).toBeVisible();
@@ -34,7 +25,7 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
     await expect(page.getByRole('button', { name: /Draw an area/i })).toBeVisible();
 
     // 4. Map and Cividis default legend
-    await expect(page.getByText(/Cividis/i)).toBeVisible();
+    await expect(page.getByText('Hotspot detections').first()).toBeVisible();
 
     // 5. Calendar "Which months were busiest?"
     await expect(page.getByRole('grid', { name: /Burn activity calendar/i })).toBeVisible();
@@ -46,7 +37,7 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
 
     // 6. Plain-language summary & Reliability badge
     await expect(page.getByText(/In [A-Za-z]+ \d{4}, satellites detected/i)).toBeVisible();
-    // Default active month is 2020-08 (observed month): must say "Measured by satellite" and have NO error band
+    // Default month is the latest month of the record (this month vs history), a measured month
     await expect(page.getByText('Measured by satellite')).toBeVisible();
     await expect(page.getByText(/typical error/i)).not.toBeVisible();
 
@@ -105,6 +96,60 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
         fullPage: false,
       });
     }
+  });
+
+  test('area outside the loaded dataset explains itself instead of showing zeros', async ({ page }) => {
+    await page.goto('/');
+    await page.getByText('Enter coordinates instead').click();
+    await page.getByLabel('Latitude °').fill('-33.9');
+    await page.getByLabel('Longitude °').fill('151.2');
+    await page.getByRole('button', { name: 'Show this area' }).click();
+    await expect(page.getByText(/No satellite data is loaded for this place/)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Download this area as CSV/ })).toBeDisabled();
+  });
+
+  test('CSV and calendar image downloads work and the CSV is marked as demo data', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Download CSV' }).first().click();
+    const [dl] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('dialog').getByRole('button', { name: 'Download CSV' }).click(),
+    ]);
+    expect(dl.suggestedFilename()).toMatch(/^pyrosync_california_/);
+    const { readFileSync } = await import('node:fs');
+    const csv = readFileSync(await dl.path(), 'utf8');
+    expect(csv).toContain('# DEMO DATA');
+    const [img] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: /Save calendar as image|PNG/ }).click(),
+    ]);
+    expect(img.suggestedFilename()).toMatch(/\.png$/);
+  });
+
+  test('region name, extent and presets come from the dataset manifest (not hard-coded)', async ({ page }) => {
+    await page.route('**/datasets/manifest.json*', async (route) => {
+      const res = await route.fetch();
+      const m = await res.json();
+      m.studyArea.name = 'Portugal';
+      m.studyArea.presets = [{ id: 'north', name: 'Douro', bbox: [-9, 40, -6, 42] }];
+      await route.fulfill({ response: res, json: m });
+    });
+    await page.goto('/');
+    await expect(page.getByText('Portugal · wildfire activity seen from satellites')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'All Portugal' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Douro' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Central' })).toHaveCount(0);
+    expect(await page.locator('body').innerText()).not.toContain('California');
+  });
+
+  test('calendar can switch to the "compared with usual" view', async ({ page }) => {
+    await page.goto('/');
+    const counts = page.getByRole('button', { name: 'Hotspot counts' });
+    const anomaly = page.getByRole('button', { name: 'Compared with usual' });
+    await expect(counts).toHaveAttribute('aria-pressed', 'true');
+    await anomaly.click();
+    await expect(anomaly).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('Much higher')).toBeVisible();
   });
 
   test('displays explicit error screen when loading malformed dataset', async ({ page }) => {
