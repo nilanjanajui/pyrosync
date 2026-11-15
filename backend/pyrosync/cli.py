@@ -8,6 +8,7 @@ from pathlib import Path
 import jsonschema
 
 from pyrosync.budget import check_dataset_budgets
+from pyrosync.export import run_export
 from pyrosync.synth import generate_synthetic_dataset
 
 SCHEMA_DIR = Path(__file__).parent / "schemas"
@@ -121,9 +122,15 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def cmd_export(args: argparse.Namespace) -> int:
-    """ETL export command (Milestone 1)."""
-    print("Export command will be executed in Milestone 1.")
-    return 0
+    """ETL export — read real Parquet/CSV inputs and write frontend datasets."""
+    data_dir = Path(args.data).resolve()
+    out_dir = Path(args.out).resolve()
+    try:
+        run_export(data_dir, out_dir)
+        return 0
+    except Exception as exc:
+        print(f"Export failed: {exc}", file=sys.stderr)
+        raise
 
 
 def main() -> None:
@@ -145,12 +152,11 @@ def main() -> None:
 
     # export
     p_export = subparsers.add_parser("export", help="Export Parquet data to JSON datasets")
-    p_export.add_argument("--grid", required=True)
-    p_export.add_argument("--modis-cm", required=True)
-    p_export.add_argument("--viirs-cm", required=True)
-    p_export.add_argument("--modis-det", required=True)
-    p_export.add_argument("--viirs-det", required=True)
-    p_export.add_argument("--boundary", required=True)
+    p_export.add_argument(
+        "--data",
+        default="../data",
+        help="Root data directory (contains aggregated/, harmonization/, product/, boundaries/)",
+    )
     p_export.add_argument("--out", default="../frontend/public/datasets")
     p_export.set_defaults(func=cmd_export)
 

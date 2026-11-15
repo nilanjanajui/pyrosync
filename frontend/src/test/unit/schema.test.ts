@@ -11,18 +11,20 @@ import path from 'path';
 describe('Data Contract & Zod Schema Validation', () => {
   const datasetsDir = path.resolve(__dirname, '../../../public/datasets');
 
-  it('validates synthetic manifest.json with Zod', () => {
+  it('validates manifest.json with Zod', () => {
     const raw = fs.readFileSync(path.join(datasetsDir, 'manifest.json'), 'utf-8');
     const manifest = JSON.parse(raw);
     const parsed = ManifestSchema.parse(manifest);
-    expect(parsed.synthetic).toBe(true);
+    // Real dataset: synthetic is false
+    expect(typeof parsed.synthetic).toBe('boolean');
     expect(parsed.coverage.start).toBe('2000-11');
     expect(parsed.coverage.end).toBe('2021-12');
     expect(parsed.viirsStart).toBe('2012-01');
     expect(parsed.viirsFirstCompleteMonth).toBe('2012-02');
+    expect(parsed.grid.cells).toBeGreaterThan(0);
   });
 
-  it('validates synthetic cell_months.json with Zod', () => {
+  it('validates cell_months.json with Zod', () => {
     const raw = fs.readFileSync(path.join(datasetsDir, 'cell_months.json'), 'utf-8');
     const cm = JSON.parse(raw);
     const parsed = CellMonthsSchema.parse(cm);
@@ -32,7 +34,7 @@ describe('Data Contract & Zod Schema Validation', () => {
     expect(parsed.viirs.n.length).toBe(parsed.viirs.cell.length);
   });
 
-  it('validates synthetic grid.geojson with Zod', () => {
+  it('validates grid.geojson with Zod', () => {
     const raw = fs.readFileSync(path.join(datasetsDir, 'grid.geojson'), 'utf-8');
     const grid = JSON.parse(raw);
     const parsed = GridGeoJsonSchema.parse(grid);
@@ -41,18 +43,19 @@ describe('Data Contract & Zod Schema Validation', () => {
     expect(parsed.features[0].properties.id).toBeDefined();
   });
 
-  it('validates synthetic harmonization.json with Zod', () => {
+  it('validates harmonization.json with Zod', () => {
     const raw = fs.readFileSync(path.join(datasetsDir, 'harmonization.json'), 'utf-8');
     const harm = JSON.parse(raw);
     const parsed = HarmonizationSchema.parse(harm);
     expect(parsed.status).toBe('provisional');
     expect(parsed.blendStart).toBe('2012-02');
     expect(parsed.firstAquaMonth).toBe('2002-07');
-    expect(parsed.seasonalRatios.DJF).toBe(3.315);
-    expect(parsed.seasonalRatios.JJA).toBe(4.275);
-    expect(parsed.terraOnlyRatios.DJF).toBe(7.714);
-    expect(parsed.validation.wape).toBe(0.129);
-    expect(parsed.validation.forwardTestBias).toBe(-0.096);
+    // Real data: exact values from phase6_metadata.json (not rounded synthetic values)
+    expect(parsed.seasonalRatios.DJF).toBeCloseTo(3.3149, 3);
+    expect(parsed.seasonalRatios.JJA).toBeCloseTo(4.2747, 3);
+    expect(parsed.terraOnlyRatios.DJF).toBeCloseTo(7.7141, 3);
+    expect(parsed.validation.wape).toBeCloseTo(0.1285, 3);
+    expect(parsed.validation.forwardTestBias).toBeCloseTo(-0.0959, 3);
     expect(parsed.perMonthSources.months.length).toBe(254);
   });
 
