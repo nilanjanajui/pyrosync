@@ -44,6 +44,14 @@ export const copy = {
     stepForward: 'Next month',
     jumpToPeak: (monthLabel: string) => `Jump to busiest month: ${monthLabel}`,
     measuredFrom: (month: string) => `Measured from ${month}`,
+    viewGlow: 'Fire glow & icons',
+    viewGrid: 'Grid cells',
+    layerDark: 'Dark canvas',
+    layerSatellite: 'Satellite',
+    searchPlaceholder: 'Search city, park, county, or coords (e.g. Yosemite, 37.8, -119.5)...',
+    searchAriaLabel: 'Search location on map',
+    clearSearch: 'Clear search',
+    locationFound: (name: string) => `Showing fire activity near ${name}`,
   },
 
   summary: {

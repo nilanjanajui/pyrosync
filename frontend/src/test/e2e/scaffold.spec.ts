@@ -5,11 +5,11 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
   test('passes visual, plain-language, and accessibility acceptance', async ({ page }) => {
     await page.goto('/');
 
-    // 1. Demo-data marker is visible near the numbers, but NOT in the top navigation bar
+    // 1. Demo-data markers are absent for real data (synthetic: false).
+    //    When synthetic: true, a Demo badge appears near numbers but NOT in the top nav bar.
     const header = page.getByRole('banner');
     await expect(header).toBeVisible();
     await expect(header).not.toContainText(/demo/i);
-    await expect(page.getByRole('note', { name: /Demo data/i }).first()).toBeVisible();
     await expect(page.getByRole('alert', { name: 'Synthetic Data Warning' })).toHaveCount(0);
 
     // 2. Header title & one-line description
@@ -108,7 +108,7 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
     await expect(page.getByRole('button', { name: /Download this area as CSV/ })).toBeDisabled();
   });
 
-  test('CSV and calendar image downloads work and the CSV is marked as demo data', async ({ page }) => {
+  test('CSV and calendar image downloads work', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Download CSV' }).first().click();
     const [dl] = await Promise.all([
@@ -118,7 +118,9 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
     expect(dl.suggestedFilename()).toMatch(/^pyrosync_california_/);
     const { readFileSync } = await import('node:fs');
     const csv = readFileSync(await dl.path(), 'utf8');
-    expect(csv).toContain('# DEMO DATA');
+    // Real data: no DEMO DATA header; CSV starts with PyroSync metadata comment
+    expect(csv).toContain('# PyroSync fire activity export');
+    // Synthetic data would contain: expect(csv).toContain('# DEMO DATA');
     const [img] = await Promise.all([
       page.waitForEvent('download'),
       page.getByRole('button', { name: /Save calendar as image|PNG/ }).click(),
@@ -160,5 +162,35 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
 
     await expect(page.getByText('Failed File: manifest.json')).toBeVisible();
     await expect(page.getByText('Failed Field: studyArea')).toBeVisible();
+  });
+
+  test('location search finds landmarks and updates map location', async ({ page }) => {
+    await page.goto('/');
+
+    const searchInput = page.getByRole('combobox', { name: /Search location/i });
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill('Yosemite');
+
+    const yosemiteOption = page.getByRole('option', { name: /Yosemite National Park/i });
+    await expect(yosemiteOption).toBeVisible();
+    await yosemiteOption.click();
+
+    await expect(page.getByText(/Yosemite National Park/i).first()).toBeVisible();
+  });
+
+  test('map switches between Satellite and Dark canvas, and Fire glow and Grid view', async ({ page }) => {
+    await page.goto('/');
+
+    const darkBtn = page.getByRole('button', { name: /Dark canvas/i });
+    const satBtn = page.getByRole('button', { name: /Satellite/i });
+    await expect(darkBtn).toHaveAttribute('aria-pressed', 'true');
+    await satBtn.click();
+    await expect(satBtn).toHaveAttribute('aria-pressed', 'true');
+
+    const glowBtn = page.getByRole('button', { name: /Fire glow & icons/i });
+    const gridBtn = page.getByRole('button', { name: /Grid cells/i });
+    await expect(glowBtn).toHaveAttribute('aria-pressed', 'true');
+    await gridBtn.click();
+    await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
   });
 });
