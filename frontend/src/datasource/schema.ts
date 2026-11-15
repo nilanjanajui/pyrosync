@@ -6,6 +6,14 @@ export const ManifestSchema = z.object({
   version: z.string(),
   generatedAtUtc: z.string(),
   synthetic: z.boolean(),
+  /**
+   * SHA-256 hex digest over the 5 core dataset files, written by `pyrosync export`.
+   * Optional so that older datasets (without the hash) still parse successfully.
+   */
+  datasetHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   studyArea: z.object({
     name: z.string(),
     bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),

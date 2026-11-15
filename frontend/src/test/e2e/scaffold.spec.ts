@@ -182,9 +182,10 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
 
     const darkBtn = page.getByRole('button', { name: /Dark canvas/i });
     const satBtn = page.getByRole('button', { name: /Satellite/i });
-    await expect(darkBtn).toHaveAttribute('aria-pressed', 'true');
-    await satBtn.click();
+    // Satellite is now the default layer
     await expect(satBtn).toHaveAttribute('aria-pressed', 'true');
+    await darkBtn.click();
+    await expect(darkBtn).toHaveAttribute('aria-pressed', 'true');
 
     const glowBtn = page.getByRole('button', { name: /Fire glow & icons/i });
     const gridBtn = page.getByRole('button', { name: /Grid cells/i });
