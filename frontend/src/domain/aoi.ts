@@ -35,14 +35,19 @@ export interface PolygonAoi {
 
 export type Aoi = BboxAoi | RadiusAoi | StateAoi | PolygonAoi;
 
-export type RegionKey = 'all' | 'north' | 'central' | 'south' | 'draw';
+/** 'all' = whole study area, 'draw' = user-drawn, anything else = a preset id from the manifest. */
+export type RegionKey = string;
 
-export const REGION_PRESETS: Record<'all' | 'north' | 'central' | 'south', Aoi> = {
-  all: { mode: 'state' },
-  north: { mode: 'bbox', bbox: [-124.5, 38.8, -119.5, 42.0] },
-  central: { mode: 'bbox', bbox: [-123.0, 35.5, -118.0, 38.8] },
-  south: { mode: 'bbox', bbox: [-121.0, 32.5, -114.1, 35.5] },
-};
+/** Study-area facts the AOI maths needs (taken from the dataset manifest). */
+export interface StudyArea {
+  bbox: [number, number, number, number];
+  areaKm2?: number;
+}
+
+function bboxAreaKm2(w: number, s: number, e: number, n: number): number {
+  const latM = (s + n) / 2;
+  return Math.abs(e - w) * 111.32 * Math.cos((latM * Math.PI) / 180) * Math.abs(n - s) * 111.32;
+}
 
 /** Returns the polygon for the AOI (for filtering and display) */
 export function aoiToPolygon(aoi: Aoi): Feature<Polygon> | null {
@@ -68,11 +73,8 @@ export function aoiToPolygon(aoi: Aoi): Feature<Polygon> | null {
 }
 
 /** Returns the bounding box of the AOI */
-export function aoiBBox(aoi: Aoi, boundary?: Feature<Polygon>): BBox | null {
-  if (aoi.mode === 'state') {
-    if (boundary) return bboxTurf(boundary);
-    return [-124.48, 32.53, -114.13, 42.01]; // California default
-  }
+export function aoiBBox(aoi: Aoi, study: StudyArea): BBox | null {
+  if (aoi.mode === 'state') return study.bbox;
   const poly = aoiToPolygon(aoi);
   if (!poly) return null;
   return bboxTurf(poly);
@@ -108,23 +110,15 @@ export function snapCellsToAoi(
  * Estimate approximate area of an AOI in km².
  * Uses a rough spherical calculation — not projected area.
  */
-export function estimateAoiAreaKm2(aoi: Aoi): number {
-  if (aoi.mode === 'state') return 423_970; // California km²
+export function estimateAoiAreaKm2(aoi: Aoi, study: StudyArea): number {
+  if (aoi.mode === 'state') return study.areaKm2 ?? bboxAreaKm2(...study.bbox);
   if (aoi.mode === 'radius') return Math.PI * aoi.radiusKm ** 2;
   if (aoi.mode === 'bbox') {
-    const [w, s, e, n] = aoi.bbox;
-    const latM = (s + n) / 2;
-    const kmPerDegLat = 111.32;
-    const kmPerDegLon = 111.32 * Math.cos((latM * Math.PI) / 180);
-    return Math.abs(e - w) * kmPerDegLon * Math.abs(n - s) * kmPerDegLat;
+    return bboxAreaKm2(...aoi.bbox);
   }
   if (aoi.mode === 'polygon') {
-    const b = bboxTurf(aoi.geometry);
-    const [w, s, e, n] = b;
-    const latM = (s + n) / 2;
-    const kmPerDegLat = 111.32;
-    const kmPerDegLon = 111.32 * Math.cos((latM * Math.PI) / 180);
-    return Math.abs(e - w) * kmPerDegLon * Math.abs(n - s) * kmPerDegLat * 0.7; // rough estimate
+    const [w, s, e, n] = bboxTurf(aoi.geometry);
+    return bboxAreaKm2(w, s, e, n) * 0.7; // rough estimate
   }
   return 0;
 }
@@ -133,8 +127,8 @@ export function estimateAoiAreaKm2(aoi: Aoi): number {
 export const MIN_AOI_AREA_KM2 = 500; // roughly 50 10km cells
 
 /** Check if the AOI is below minimum size */
-export function isAoiTooSmall(aoi: Aoi): boolean {
-  return estimateAoiAreaKm2(aoi) < MIN_AOI_AREA_KM2;
+export function isAoiTooSmall(aoi: Aoi, study: StudyArea): boolean {
+  return estimateAoiAreaKm2(aoi, study) < MIN_AOI_AREA_KM2;
 }
 
 /** Build a GeoJSON FeatureCollection from matched cell features (for map highlight) */

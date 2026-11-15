@@ -1,3 +1,4 @@
+import { setEra, getEra } from '../../domain/era';
 import { describe, it, expect } from 'vitest';
 import {
   median,
@@ -105,12 +106,21 @@ describe('AOI domain logic (aoi.ts)', () => {
   });
 
   it('identifies small AOIs below MIN_AOI_AREA_KM2', () => {
-    expect(estimateAoiAreaKm2({ mode: 'state' })).toBe(423970);
-    expect(isAoiTooSmall({ mode: 'state' })).toBe(false);
+    const study = { bbox: [-124.48, 32.53, -114.13, 42.01] as [number, number, number, number], areaKm2: 423970 };
+    expect(estimateAoiAreaKm2({ mode: 'state' }, study)).toBe(423970);
+    expect(isAoiTooSmall({ mode: 'state' }, study)).toBe(false);
     // 1 km radius circle area ~ 3.14 km² < 500 km²
-    expect(isAoiTooSmall({ mode: 'radius', center: [-120, 37], radiusKm: 1 })).toBe(true);
+    expect(isAoiTooSmall({ mode: 'radius', center: [-120, 37], radiusKm: 1 }, study)).toBe(true);
     // 50 km radius circle area ~ 7853 km² > 500 km²
-    expect(isAoiTooSmall({ mode: 'radius', center: [-120, 37], radiusKm: 50 })).toBe(false);
+    expect(isAoiTooSmall({ mode: 'radius', center: [-120, 37], radiusKm: 50 }, study)).toBe(false);
+  });
+
+  it('works for a study area anywhere on Earth (no area given -> estimated from bbox)', () => {
+    const australia = { bbox: [113, -44, 154, -10] as [number, number, number, number] };
+    const km2 = estimateAoiAreaKm2({ mode: 'state' }, australia);
+    // bounding-box estimate (an upper bound for the land area, which is why the manifest can supply areaKm2)
+    expect(km2).toBeGreaterThan(14_000_000);
+    expect(km2).toBeLessThan(17_000_000);
   });
 
   it('snaps cells to AOI correctly', () => {
@@ -159,5 +169,35 @@ describe('Aggregation and timeline metadata (aggregate.ts)', () => {
     expect(sourceLabel(1)).toContain('MODIS→VIIRS');
     expect(sourceLabel(2)).toContain('Terra-only');
     expect(sourceLabel(255)).toBe('No data');
+  });
+});
+
+import { ordinal, formatLatLon, slug } from '../../domain/study';
+
+describe('study helpers', () => {
+  it('formats ordinals correctly', () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 81, 100, 101, 111].map(ordinal)).toEqual([
+      '1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '81st', '100th', '101st', '111th',
+    ]);
+  });
+  it('formats coordinates in every hemisphere', () => {
+    expect(formatLatLon(37.8, -122.4)).toBe('37.80°N, 122.40°W');
+    expect(formatLatLon(-33.87, 151.21)).toBe('33.87°S, 151.21°E');
+  });
+  it('slugs study-area names for file names', () => {
+    expect(slug('Western Australia (Test)')).toBe('western_australia_test');
+  });
+});
+
+describe('sensor eras come from the manifest, not from code', () => {
+  it('uses another region\'s dates and restores the defaults afterwards', () => {
+    const saved = getEra();
+    setEra({ blendStart: '2013-05', partialMonths: ['2013-04'], firstAquaMonth: null });
+    expect(isPredictedMonth('2013-04')).toBe(true);
+    expect(isPredictedMonth('2013-05')).toBe(false);
+    expect(isPartialViirsMonth('2013-04')).toBe(true);
+    expect(isPartialViirsMonth('2012-01')).toBe(false);
+    expect(isTerraOnlyMonth('2000-11')).toBe(false);
+    setEra(saved);
   });
 });

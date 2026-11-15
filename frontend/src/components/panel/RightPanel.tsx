@@ -1,173 +1,218 @@
 import React, { useMemo } from 'react';
 import { useAppStore } from '../../store/appStore';
 import { aoiSeries, isPredictedMonth } from '../../domain/aggregate';
-import { buildClimatology, midRankPercentile } from '../../domain/stats';
+import { buildClimatology, median, midRankPercentile } from '../../domain/stats';
 import { estimateAoiAreaKm2, isAoiTooSmall } from '../../domain/aoi';
+import { studyGeometry, studyName } from '../../domain/study';
 import { BurnCalendar } from '../calendar/BurnCalendar';
-import { CheckCircle2, AlertCircle, Download } from 'lucide-react';
+import { CoordinateForm } from '../aoi/CoordinateForm';
+import { DemoBadge } from '../common/DemoBadge';
+import { CheckCircle2, AlertCircle, Download, MapPinOff, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import copy from '../../copy';
 
+const monthInput =
+  'w-full rounded-md border border-app-border bg-app-surface2 px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500';
+
 export const RightPanel: React.FC = () => {
-  const {
-    dataset,
-    selectedCellIndexes,
-    activeMonth,
-    aoi,
-    setIsExportModalOpen,
-  } = useAppStore();
+  const { dataset, selectedCellIndexes, activeMonth, aoi, setIsExportModalOpen, dateStart, dateEnd, setDateRange } =
+    useAppStore();
 
-  const activeMonthStr = useMemo(() => {
-    if (activeMonth) return activeMonth;
-    return '2020-08'; // Default to peak record month for immediate analytical clarity
-  }, [activeMonth]);
-
-  const summaryData = useMemo(() => {
+  const summary = useMemo(() => {
     if (!dataset) return null;
+    const month = activeMonth ?? dataset.months[dataset.numMonths - 1];
+    const series = aoiSeries(dataset, selectedCellIndexes, 'harmonized');
+    const mIdx = dataset.monthIndexMap.get(month) ?? dataset.numMonths - 1;
+    const count = Math.round(series.values[mIdx] || 0);
 
-    const harmSeries = aoiSeries(dataset, selectedCellIndexes, 'harmonized');
-    const mIdx = dataset.monthIndexMap.get(activeMonthStr) ?? (dataset.numMonths - 1);
-    const count = Math.round(harmSeries.values[mIdx] || 0);
+    const date = new Date(`${month}-01T00:00:00Z`);
+    const monthName = date.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+    const monthYear = date.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-    const [, monStr] = activeMonthStr.split('-');
-    const calMon = parseInt(monStr, 10);
-
-    const dateObj = new Date(`${activeMonthStr}-01T00:00:00Z`);
-    const monthName = dateObj.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-    const monthYear = dateObj.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-
-    // Historical comparison for this same calendar month across years
-    const climatology = buildClimatology(dataset.months, harmSeries.values);
-    const history = climatology.get(calMon) || [];
-    const validHistory = history.filter((v) => !isNaN(v));
-
+    const history = (buildClimatology(dataset.months, series.values).get(date.getUTCMonth() + 1) ?? []).filter(
+      (v) => !isNaN(v)
+    );
+    const usual = Math.round(median(history));
     let pct = 50;
-    if (validHistory.length > 1) {
-      const p = midRankPercentile(count, validHistory);
-      pct = Math.round(p * 100);
-    }
+    if (history.length > 1) pct = Math.round(midRankPercentile(count, history) * 100);
 
     let typicality: string = copy.summary.typical;
     if (pct >= 75) typicality = copy.summary.unusualHigh;
     else if (pct <= 25) typicality = copy.summary.unusualLow;
 
-    const pctText = copy.summary.percentileHigherThan(pct, monthName);
-    const sentence = copy.summary.sentence(monthYear, count, monthName, typicality, pctText);
-
-    const isEstimated = isPredictedMonth(activeMonthStr);
-    const tooSmall = isAoiTooSmall(aoi);
-    const areaKm2 = Math.round(estimateAoiAreaKm2(aoi));
-
-    // Typical error percentage from official validation parameters
-    const typicalErrorPct = Math.round((dataset.harmonization?.validation?.wape ?? 0.129) * 100);
-
+    const study = studyGeometry(dataset);
     return {
       count,
       pct,
-      sentence,
-      isEstimated,
-      tooSmall,
-      areaKm2,
-      typicalErrorPct,
+      usual,
+      monthName,
+      monthYear,
+      delta: usual > 0 ? Math.round(((count - usual) / usual) * 100) : null,
+      sentence: copy.summary.sentence(
+        monthYear,
+        count,
+        monthName,
+        typicality,
+        copy.summary.percentileHigherThan(pct, monthName, dataset.manifest.coverage.start.slice(0, 4))
+      ),
+      isEstimated: isPredictedMonth(month),
+      tooSmall: isAoiTooSmall(aoi, study),
+      areaKm2: Math.round(estimateAoiAreaKm2(aoi, study)),
+      typicalErrorPct: Math.round((dataset.harmonization?.validation?.wape ?? 0.129) * 100),
     };
-  }, [dataset, selectedCellIndexes, activeMonthStr, aoi]);
+  }, [dataset, selectedCellIndexes, activeMonth, aoi]);
 
-  if (!summaryData) return null;
+  if (!dataset || !summary) return null;
+
+  const first = dataset.months[0];
+  const last = dataset.months[dataset.numMonths - 1];
+  const empty = selectedCellIndexes.length === 0;
+  const tile = 'rounded-lg bg-app-surface2/60 p-2.5';
+  const tileLabel = 'block text-xs leading-tight text-app-textMuted';
 
   return (
-    <div className="flex flex-col gap-4 font-sans text-app-text h-full overflow-y-auto">
-      {/* A. Plain-Language Summary of Area and Month */}
-      <section
-        aria-label={copy.summary.title}
-        className="bg-app-surface1 rounded-xl border border-app-border p-4 shadow-sm"
-      >
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <h2 className="text-sm font-bold text-white tracking-tight uppercase">
-            {copy.summary.title}
-          </h2>
-          {/* Reliability Chip (Defect 3: Observed has NO error band; Estimated shows typical error) */}
-          <div className="shrink-0">
-            {summaryData.isEstimated ? (
+    <div className="flex h-full flex-col gap-4 overflow-y-auto pr-1 font-sans text-app-text [&>*]:shrink-0">
+      <section aria-label={copy.summary.title} className="rounded-xl border border-app-border bg-app-surface1 p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold tracking-tight text-white">{copy.summary.title}</h2>
+            <DemoBadge isSynthetic={dataset.manifest.synthetic} />
+          </div>
+          {!empty &&
+            (summary.isEstimated ? (
               <span
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300"
                 title={copy.reliability.estimatedTooltip}
               >
-                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
-                <span>{copy.reliability.estimatedBadge}</span>
+                <AlertCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                {copy.reliability.estimatedBadge}
               </span>
             ) : (
               <span
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300"
                 title={copy.reliability.measuredTooltip}
               >
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{copy.reliability.measuredBadge}</span>
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                {copy.reliability.measuredBadge}
               </span>
-            )}
-          </div>
+            ))}
         </div>
 
-        {/* Narrative Sentence (High-school reading level, accessible, plain english) */}
-        <p className="text-sm text-gray-200 leading-relaxed mb-4">
-          {summaryData.sentence}
-        </p>
-
-        {/* Max 3 Summary Numbers Visible At Once (NO KPI GRID) */}
-        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-app-border/80 text-center">
-          <div className="bg-app-surface2/60 p-2 rounded-lg">
-            <span className="text-[11px] text-app-textSubdued block leading-tight">Hotspots</span>
-            <span className="text-lg font-bold font-mono text-amber-400">
-              {summaryData.count.toLocaleString()}
-            </span>
+        {empty ? (
+          <div role="status" className="flex items-start gap-2 rounded-lg border border-amber-600/40 bg-amber-950/40 p-3 text-sm text-amber-100">
+            <MapPinOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+            <span>{copy.summary.noCoverage(studyName(dataset))}</span>
           </div>
-
-          <div className="bg-app-surface2/60 p-2 rounded-lg">
-            <span className="text-[11px] text-app-textSubdued block leading-tight">Historical Rank</span>
-            <span className="text-lg font-bold font-mono text-white">
-              {summaryData.pct}th <span className="text-xs font-normal text-app-textMuted">%tile</span>
-            </span>
-          </div>
-
-          <div className="bg-app-surface2/60 p-2 rounded-lg">
-            <span className="text-[11px] text-app-textSubdued block leading-tight">Area Coverage</span>
-            <span className="text-lg font-bold font-mono text-white">
-              {selectedCellIndexes.length}{' '}
-              <span className="text-xs font-normal text-app-textMuted">cells</span>
-            </span>
-          </div>
-        </div>
-
-        {/* Reliability & Small Area Warnings */}
-        <div className="mt-3 space-y-1.5">
-          {summaryData.isEstimated && (
-            <p className="text-xs text-amber-300/90 flex items-center gap-1 font-mono">
-              <span>{copy.reliability.typicalErrorLabel(summaryData.typicalErrorPct)}</span>
-            </p>
-          )}
-
-          {summaryData.isEstimated && summaryData.tooSmall && (
-            <div className="bg-amber-950/40 border border-amber-600/40 rounded-lg p-2.5 text-xs text-amber-200 leading-snug">
-              {copy.reliability.smallAreaWarning}
+        ) : (
+          <>
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <span className="block text-xs font-medium uppercase tracking-wide text-app-textMuted">
+                  {copy.summary.detectionsLabel} · {summary.monthYear}
+                </span>
+                <span className="text-4xl font-bold leading-none tabular-nums text-white">
+                  {summary.count.toLocaleString()}
+                </span>
+              </div>
+              {summary.delta === null ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-app-border bg-app-surface2 px-3 py-1.5 text-xs font-medium text-app-textMuted">
+                  <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copy.summary.vsUsualNone}
+                </span>
+              ) : Math.abs(summary.delta) < 10 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-app-border bg-app-surface2 px-3 py-1.5 text-xs font-semibold text-gray-200">
+                  <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copy.summary.vsUsualSame}
+                </span>
+              ) : summary.delta > 0 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-500/40 bg-orange-500/15 px-3 py-1.5 text-xs font-semibold text-orange-300">
+                  <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copy.summary.vsUsualAbove(summary.delta)}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-400/40 bg-violet-500/15 px-3 py-1.5 text-xs font-semibold text-violet-300">
+                  <TrendingDown className="h-3.5 w-3.5" aria-hidden="true" />
+                  {copy.summary.vsUsualBelow(Math.abs(summary.delta))}
+                </span>
+              )}
             </div>
-          )}
-        </div>
+            <p className="mb-4 text-sm leading-relaxed text-gray-300">{summary.sentence}</p>
+            <div className="grid grid-cols-2 gap-2 border-t border-app-border/80 pt-3">
+              <div className={tile} title={copy.summary.usualNote}>
+                <span className={tileLabel}>{copy.summary.usualLabel(summary.monthName)}</span>
+                <span className="text-xl font-bold tabular-nums text-white">
+                  {isNaN(summary.usual) ? '–' : summary.usual.toLocaleString()}
+                </span>
+              </div>
+              <div className={tile}>
+                <span className={tileLabel}>{copy.summary.cellsLabel}</span>
+                <span className="text-xl font-bold tabular-nums text-white">{summary.areaKm2.toLocaleString()}</span>
+                <span className="ml-1 text-xs text-app-textMuted">km²</span>
+              </div>
+            </div>
+            {summary.isEstimated && (
+              <div className="mt-3 space-y-2">
+                <p className="text-xs text-amber-300/90">{copy.reliability.typicalErrorLabel(summary.typicalErrorPct)}</p>
+                {summary.tooSmall && (
+                  <div className="rounded-lg border border-amber-600/40 bg-amber-950/40 p-2.5 text-xs leading-snug text-amber-200">
+                    {copy.reliability.smallAreaWarning}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
       </section>
 
-      {/* B. Calendar Heatmap: Which months were busiest? */}
-      <section aria-label={copy.calendar.title} className="flex-1 min-h-[300px]">
+      <section
+        aria-label={copy.download.rangeTitle}
+        className="flex flex-wrap items-end gap-3 rounded-xl border border-app-border bg-app-surface1 px-4 py-3"
+      >
+        <label className="min-w-[130px] flex-1 text-xs text-app-textMuted">
+          {copy.download.rangeFrom}
+          <input
+            type="month"
+            className={monthInput}
+            min={first}
+            max={dateEnd}
+            value={dateStart}
+            onChange={(e) => e.target.value && setDateRange(e.target.value, dateEnd)}
+          />
+        </label>
+        <label className="min-w-[130px] flex-1 text-xs text-app-textMuted">
+          {copy.download.rangeTo}
+          <input
+            type="month"
+            className={monthInput}
+            min={dateStart}
+            max={last}
+            value={dateEnd}
+            onChange={(e) => e.target.value && setDateRange(dateStart, e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={() => setDateRange(first, last)}
+          className="min-h-[38px] rounded-md px-2 text-xs text-amber-300 hover:bg-app-surface2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+        >
+          {copy.download.rangeReset}
+        </button>
+      </section>
+
+      <section aria-label={copy.calendar.title}>
         <BurnCalendar />
       </section>
 
-      {/* D. Download Button */}
-      <div className="pt-1">
-        <button
-          type="button"
-          onClick={() => setIsExportModalOpen(true)}
-          className="w-full min-h-[44px] py-2.5 px-4 rounded-xl bg-app-surface2 hover:bg-app-elevated border border-app-border hover:border-amber-500/50 text-white text-sm font-semibold transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
-        >
-          <Download className="w-4 h-4 text-amber-400" />
-          <span>{copy.download.buttonLabel}</span>
-        </button>
-      </div>
+      <CoordinateForm />
+
+      <button
+        type="button"
+        onClick={() => setIsExportModalOpen(true)}
+        disabled={empty}
+        className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-app-border bg-app-surface2 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:border-amber-500/50 hover:bg-app-elevated focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <Download className="h-4 w-4 text-amber-400" aria-hidden="true" />
+        <span>{copy.download.buttonLabel}</span>
+      </button>
     </div>
   );
 };

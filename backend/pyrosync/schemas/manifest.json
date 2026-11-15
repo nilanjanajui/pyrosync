@@ -32,6 +32,24 @@
           "items": { "type": "number" },
           "minItems": 4,
           "maxItems": 4
+        },
+        "areaKm2": { "type": "number", "exclusiveMinimum": 0 },
+        "presets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "name", "bbox"],
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "bbox": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 4,
+                "maxItems": 4
+              }
+            }
+          }
         }
       }
     },
@@ -44,8 +62,8 @@
       }
     },
     "modisStart": { "type": "string" },
-    "viirsStart": { "type": "string", "const": "2012-01" },
-    "viirsFirstCompleteMonth": { "type": "string", "const": "2012-02" },
+    "viirsStart": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
+    "viirsFirstCompleteMonth": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])$" },
     "viirsPartialMonths": {
       "type": "array",
       "items": { "type": "string" }

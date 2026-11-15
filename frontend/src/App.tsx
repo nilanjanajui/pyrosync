@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { loadDataset, type DatasetLoadError } from './datasource/load';
-import { SyntheticBanner } from './components/common/SyntheticBanner';
 import { ErrorScreen } from './components/common/ErrorScreen';
 import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
@@ -11,30 +10,55 @@ import { ExportModal } from './components/modals/ExportModal';
 import { Flame } from 'lucide-react';
 import { useAppStore } from './store/appStore';
 import { snapCellsToAoi } from './domain/aoi';
+import { setEra } from './domain/era';
+import type { RegionEntry } from './domain/study';
 
 export const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<DatasetLoadError | null>(null);
+  const [regions, setRegions] = useState<RegionEntry[] | null>(null);
+  const [regionId, setRegionId] = useState<string | null>(new URLSearchParams(window.location.search).get('region'));
+
+  // Optional region registry; a missing file just means a single-region deployment.
+  useEffect(() => {
+    fetch('/datasets/regions.json')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: unknown) => {
+        const ok = Array.isArray(list) ? (list as RegionEntry[]).filter((x) => x?.id && x?.name && x?.path) : [];
+        setRegions(ok);
+      })
+      .catch(() => setRegions([]));
+  }, []);
 
   const {
     dataset,
     setDataset,
     aoi,
     setSelectedCellIndexes,
+    setDateRange,
+    setActiveMonth,
     liveAnnouncement,
   } = useAppStore();
 
   // Custom dataset path support (?dataset=malformed)
   const queryParams = new URLSearchParams(window.location.search);
   const customDataset = queryParams.get('dataset');
-  const basePath = customDataset === 'malformed' ? '/datasets/malformed' : '/datasets';
+  const regionPath = regions?.find((r) => r.id === regionId)?.path ?? regions?.[0]?.path;
+  const basePath = customDataset === 'malformed' ? '/datasets/malformed' : regionPath ?? '/datasets';
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await loadDataset(basePath);
+      setEra({
+        blendStart: data.manifest.viirsFirstCompleteMonth,
+        partialMonths: data.manifest.viirsPartialMonths,
+        firstAquaMonth: data.manifest.firstAquaMonth,
+      });
       setDataset(data);
+      setDateRange(data.months[0], data.months[data.numMonths - 1]);
+      setActiveMonth(data.months[data.numMonths - 1]); // the latest month: "this month vs history"
       // Initialize with statewide selection (all cells)
       setSelectedCellIndexes(data.grid.features.map((_, i) => i));
     } catch (err: unknown) {
@@ -43,11 +67,19 @@ export const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [basePath, setDataset, setSelectedCellIndexes]);
+  }, [basePath, setDataset, setSelectedCellIndexes, setDateRange, setActiveMonth]);
 
   useEffect(() => {
+    if (regions === null) return; // wait for the registry check so the right dataset loads first
     loadData();
-  }, [loadData]);
+  }, [loadData, regions]);
+
+  const changeRegion = (id: string) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set('region', id);
+    window.history.replaceState({}, '', url);
+    setRegionId(id);
+  };
 
   // Sync AOI changes with cell snapping
   useEffect(() => {
@@ -63,7 +95,7 @@ export const App: React.FC = () => {
           <Flame className="w-8 h-8 text-amber-400" aria-hidden="true" />
         </div>
         <h2 className="text-sm font-bold tracking-wider uppercase text-white">
-          Loading PyroSync Satellite Records...
+          Loading satellite records…
         </h2>
       </div>
     );
@@ -76,7 +108,7 @@ export const App: React.FC = () => {
   if (!dataset) return null;
 
   return (
-    <div className="min-h-screen bg-app-bg text-app-text flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
+    <div className="min-h-screen lg:h-screen bg-app-bg text-app-text flex flex-col font-sans selection:bg-amber-500/30 selection:text-amber-200">
       {/* Screen Reader Skip Link */}
       <a
         href="#main-workspace"
@@ -95,16 +127,13 @@ export const App: React.FC = () => {
         {liveAnnouncement}
       </div>
 
-      {/* Slim Persistent Synthetic Demo Banner in normal flow (Never overlaps header) */}
-      <SyntheticBanner isSynthetic={dataset.manifest.synthetic} />
-
-      {/* Top Bar: Logo, PyroSync, One-line tagline, Buttons: How it works, Download */}
-      <Header />
+      {/* Top bar: logo, name, study area, how it works, download */}
+      <Header regions={regions ?? []} regionId={regionId ?? regions?.[0]?.id ?? null} onRegionChange={changeRegion} />
 
       {/* Main Single-Screen Workspace (Desktop: one screen, no vertical page scroll) */}
       <main
         id="main-workspace"
-        className="flex-1 max-w-[1920px] w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:h-[calc(100vh-84px)] lg:overflow-hidden"
+        className="flex-1 max-w-[1920px] w-full mx-auto p-3 sm:p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:min-h-0 lg:overflow-hidden"
       >
         {/* Left 65% (8 of 12 cols on desktop): Large Map with Region Chips & Timeline Slider */}
         <section aria-label="Spatial Activity Exploration" className="lg:col-span-8 flex flex-col h-full min-h-[460px] lg:min-h-0">

@@ -12,21 +12,20 @@
 export const copy = {
   header: {
     title: 'PyroSync',
-    tagline: 'California wildfire activity from satellites, 2000–2021',
+    tagline: (area: string) => `${area} · wildfire activity seen from satellites`,
+    coverageChip: (start: string, end: string) => `${start} to ${end}`,
+    regionLabel: 'Region',
     howItWorksButton: 'How it works',
     downloadButton: 'Download CSV',
   },
 
-  syntheticBanner: {
-    badge: 'DEMO DATA',
-    message: 'Showing simulated data for testing. Not for operational fire management decisions.',
+  demo: {
+    badge: 'Demo data',
+    message: 'Simulated test data. Not for operational fire management decisions.',
   },
 
   regions: {
-    all: 'All California',
-    north: 'North',
-    central: 'Central',
-    south: 'South',
+    all: (area: string) => `All ${area}`,
     draw: 'Draw an area',
     drawingActive: 'Click and drag to draw an area',
     clearDraw: 'Clear custom area',
@@ -43,14 +42,24 @@ export const copy = {
     pause: 'Pause timeline',
     stepBack: 'Previous month',
     stepForward: 'Next month',
-    jumpToRecord: 'Jump to peak: Aug 2020',
+    jumpToPeak: (monthLabel: string) => `Jump to busiest month: ${monthLabel}`,
+    measuredFrom: (month: string) => `Measured from ${month}`,
   },
 
   summary: {
+    noCoverage: (area: string) =>
+      `No satellite data is loaded for this place. The current dataset covers ${area}. Move or redraw the area inside it.`,
+    usualLabel: (month: string) => `Usual for ${month}`,
+    cellsLabel: 'Area size',
     title: 'Area and month summary',
     detectionsLabel: 'Hotspot detections',
-    percentileHigherThan: (pct: number, month: string) =>
-      `higher than ${pct}% of ${month}s since 2000`,
+    percentileHigherThan: (pct: number, month: string, sinceYear: string) =>
+      `higher than ${pct}% of ${month}s since ${sinceYear}`,
+    vsUsualAbove: (pct: number) => `${pct}% above usual`,
+    vsUsualBelow: (pct: number) => `${pct}% below usual`,
+    vsUsualSame: 'About usual',
+    vsUsualNone: 'No usual value yet',
+    usualNote: 'Usual = median of the same month in all other years',
     typical: 'about typical',
     unusualHigh: 'much busier than usual',
     unusualLow: 'quieter than usual',
@@ -65,7 +74,15 @@ export const copy = {
     legendModerate: 'Moderate',
     legendBusy: 'Busy',
     legendVeryBusy: 'Very busy',
-    legendEstimated: 'Estimated (pre-2012)',
+    legendEstimated: 'Estimated',
+    modeCounts: 'Hotspot counts',
+    modeAnomaly: 'Compared with usual',
+    anomalySubtitle: 'Each square compares a month with the usual (median) for the same calendar month.',
+    anomalyMuchLower: 'Much lower',
+    anomalyLower: 'Lower',
+    anomalyUsual: 'About usual',
+    anomalyHigher: 'Higher',
+    anomalyMuchHigher: 'Much higher',
     legendNoData: 'No data',
   },
 
@@ -84,30 +101,35 @@ export const copy = {
     modalTitle: 'Download Monthly Detection Records',
     modalDescription:
       'Export the monthly detection count series for your selected area as a standard CSV file.',
-    filenamePrefix: 'pyrosync_california_fire_detections',
+    rangeTitle: 'Date range',
+    rangeFrom: 'From',
+    rangeTo: 'To',
+    rangeReset: 'Full record',
+    imageButton: 'Save calendar as image',
+    coordsTitle: 'Enter coordinates instead',
   },
 
   drawer: {
     title: 'How PyroSync Works and Data Accuracy',
     closeButton: 'Close',
     paragraph1Title: 'How satellites see fires',
-    paragraph1:
-      'Satellites scan California from space day and night, picking up infrared heat from active burning. When a satellite pixel shows an unusual heat signature, it is recorded as a "fire hotspot detection." A detection is a satellite sighting of heat during an orbit—it is not the same as one single wildfire or the total acreage burned.',
+    paragraph1: (area: string) =>
+      `Satellites scan ${area} from space day and night, picking up infrared heat from active burning. When a satellite pixel shows an unusual heat signature, it is recorded as a "fire hotspot detection." A detection is a satellite sighting of heat during an orbit—it is not the same as one single wildfire or the total acreage burned.`,
     paragraph2Title: 'Connecting two generations of satellites',
-    paragraph2:
-      'From 2000 to 2011, NASA relied on the MODIS instrument, which observes the earth in 1-kilometer grid boxes. In 2012, the sharper VIIRS instrument began operating with 375-meter resolution, spotting smaller and cooler fires that older sensors missed. PyroSync uses seasonal relationships measured during 10 years of dual-satellite overlap to translate older records onto the modern scale, letting you compare fire activity fairly across all 22 years.',
+    paragraph2: (_startYear: string, years: number, viirsYear: string) =>
+      `Until ${viirsYear}, the record relies on the MODIS instrument, which observes the earth in 1-kilometer grid boxes. From ${viirsYear}, the sharper VIIRS instrument operates with 375-meter resolution, spotting smaller and cooler fires that older sensors missed. PyroSync uses seasonal relationships measured during the years when both satellites overlap to translate older records onto the modern scale, letting you compare fire activity fairly across all ${years} years.`,
     paragraph3Title: 'How reliable are the numbers?',
-    paragraph3:
-      'Months from February 2012 onward are direct satellite measurements. Earlier months are statistical estimates. In regional cross-checks, estimated monthly totals matched satellite benchmarks within about 13%. When examining smaller custom areas, monthly estimates are less certain, so we recommend viewing wider areas or annual totals for local studies.',
+    paragraph3: (area: string, errPct: number, blendLabel: string) =>
+      `Months from ${blendLabel} onward are direct satellite measurements. Earlier months are statistical estimates. In cross-checks over ${area}, estimated monthly totals typically differed from the satellite benchmark by about ${errPct}%. The scaling was fitted and checked on ${area} data only, so it should be re-checked before it is applied to another region. When examining smaller custom areas, monthly estimates are less certain, so we recommend viewing wider areas or annual totals for local studies.`,
     glossaryTitle: 'Glossary',
     glossaryHotspotTitle: 'Hotspot detection',
     glossaryHotspotDef: 'One satellite pixel flagged as burning. It is not the same as one fire.',
     glossaryEstimatedTitle: 'Estimated month',
-    glossaryEstimatedDef:
-      'Months before February 2012 where counts are translated from older MODIS observations using seasonal models.',
+    glossaryEstimatedDef: (blendLabel: string) =>
+      `Months before ${blendLabel} where counts are translated from older MODIS observations using seasonal models.`,
     glossaryMeasuredTitle: 'Measured month',
-    glossaryMeasuredDef:
-      'Months from February 2012 onward directly observed by the high-resolution VIIRS satellite sensor.',
+    glossaryMeasuredDef: (blendLabel: string) =>
+      `Months from ${blendLabel} onward directly observed by the high-resolution VIIRS satellite sensor.`,
     advancedTitle: 'Advanced settings and technical details',
     advancedDescription:
       'Inspect raw sensor counts, exact coordinates, or scientific validation parameters.',
@@ -119,7 +141,7 @@ export const copy = {
 
   footer: {
     archiveNote: 'Data from the NASA FIRMS archive.',
-    coverageNote: 'The record ends December 2021.',
+    coverageNote: (end: string) => `The record ends ${end}.`,
     detectionSemantics: 'Counts are satellite detections, not fires or burned area.',
     accessibilityLink: 'Accessibility statement',
   },

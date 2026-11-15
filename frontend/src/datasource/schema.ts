@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const YearMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+
 export const ManifestSchema = z.object({
   version: z.string(),
   generatedAtUtc: z.string(),
@@ -7,14 +9,26 @@ export const ManifestSchema = z.object({
   studyArea: z.object({
     name: z.string(),
     bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+    /** Optional: land area of the study area in km² (used for the "whole area" size). */
+    areaKm2: z.number().positive().optional(),
+    /** Optional: named sub-regions shown as quick-select chips. */
+    presets: z
+      .array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
+        })
+      )
+      .optional(),
   }),
   coverage: z.object({
     start: z.string(),
     end: z.string(),
   }),
   modisStart: z.string(),
-  viirsStart: z.literal('2012-01'),
-  viirsFirstCompleteMonth: z.literal('2012-02'),
+  viirsStart: YearMonth,
+  viirsFirstCompleteMonth: YearMonth,
   viirsPartialMonths: z.array(z.string()),
   firstAquaMonth: z.string(),
   grid: z.object({
@@ -124,8 +138,8 @@ export const HarmonizationSchema = z.object({
   status: z.enum(['provisional', 'validated']),
   method: z.string(),
   version: z.string(),
-  blendStart: z.literal('2012-02'),
-  firstAquaMonth: z.literal('2002-07'),
+  blendStart: YearMonth,
+  firstAquaMonth: YearMonth,
 
   /** VIIRS/MODIS seasonal ratios for MODIS+Aqua era (2002-07 → 2012-01) */
   seasonalRatios: SeasonalRatiosSchema,

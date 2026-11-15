@@ -4,13 +4,12 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { BASEMAP_STYLE_URL, FALLBACK_BLANK_STYLE } from '../../config/map-style';
 import { CIVIDIS } from '../../config/colors';
 import type { DenseDataset } from '../../datasource/load';
-import {
-  snapCellsToAoi,
-  REGION_PRESETS,
-  type RegionKey,
-} from '../../domain/aoi';
+import { snapCellsToAoi, aoiBBox, type RegionKey } from '../../domain/aoi';
+import { studyGeometry, studyName, studyPresets, peakMonth, monthLabel, formatLatLon } from '../../domain/study';
 import { useAppStore } from '../../store/appStore';
 import { Play, Pause, ChevronLeft, ChevronRight, Square, RotateCcw } from 'lucide-react';
+import { getEra } from '../../domain/era';
+import { isPredictedMonth } from '../../domain/aggregate';
 import copy from '../../copy';
 
 interface FireMapProps {
@@ -29,7 +28,7 @@ function buildCividisChoropleth(maxCount: number): maplibregl.ExpressionSpecific
   return [
     'interpolate',
     ['linear'],
-    ['feature-state', 'count'],
+    ['coalesce', ['feature-state', 'count'], 0],
     ...stops,
   ] as maplibregl.ExpressionSpecification;
 }
@@ -46,7 +45,13 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     activeMonth,
     setActiveMonth,
     setMapReady,
+    mapReady,
+    fitRequest,
   } = useAppStore();
+  const study = useMemo(() => studyGeometry(dataset), [dataset]);
+  const presets = useMemo(() => studyPresets(dataset), [dataset]);
+  const peak = useMemo(() => peakMonth(dataset), [dataset]);
+  const maxCountRef = useRef(0);
 
   const [activeRegion, setActiveRegion] = useState<RegionKey>('all');
   const [isDrawing, setIsDrawing] = useState(false);
@@ -83,6 +88,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
   }, [dataset, mIdx, sensorMode]);
 
   cellCountsRef.current = cellCounts;
+  maxCountRef.current = maxCellCount;
 
   // Initialize MapLibre
   const initMap = useCallback(() => {
@@ -91,14 +97,16 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     const map = new maplibregl.Map({
       container: mapContainerRef.current,
       style: basemapFailed ? FALLBACK_BLANK_STYLE : BASEMAP_STYLE_URL,
-      center: [-119.5, 37.2],
-      zoom: 5.6,
-      maxBounds: [
-        [-128.5, 30.0],
-        [-111.0, 44.5],
+      bounds: [
+        [study.bbox[0], study.bbox[1]],
+        [study.bbox[2], study.bbox[3]],
       ],
+      fitBoundsOptions: { padding: 48 },
+      minZoom: 1,
       attributionControl: { compact: true },
     });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-left');
+    map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
 
     mapRef.current = map;
 
@@ -109,10 +117,16 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     });
 
     map.on('load', () => {
-      // 1. Add California Boundary
+      // 1. Add the study-area boundary (shown even when zoomed far out)
       map.addSource('ca-boundary', {
         type: 'geojson',
         data: dataset.boundary as unknown as GeoJSON.GeoJSON,
+      });
+      map.addLayer({
+        id: 'ca-boundary-fill',
+        type: 'fill',
+        source: 'ca-boundary',
+        paint: { 'fill-color': '#f59e0b', 'fill-opacity': 0.05 },
       });
 
       map.addLayer({
@@ -139,7 +153,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         type: 'fill',
         source: 'ca-grid',
         paint: {
-          'fill-color': buildCividisChoropleth(maxCellCount),
+          'fill-color': buildCividisChoropleth(maxCountRef.current),
           'fill-opacity': [
             'case',
             ['boolean', ['feature-state', 'selected'], true],
@@ -210,7 +224,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
           .setHTML(
             `<div class="p-1.5 text-xs font-sans text-gray-100 font-medium">
               <span class="text-amber-400 font-bold">${Math.round(count).toLocaleString()}</span> fire detections
-              <div class="text-[10px] text-gray-400 font-mono mt-0.5">${f.properties?.lat?.toFixed(2)}°N, ${f.properties?.lon?.toFixed(2)}°W</div>
+              <div class="text-[11px] text-gray-400 mt-0.5">${formatLatLon(f.properties?.lat, f.properties?.lon)}</div>
             </div>`
           )
           .addTo(map);
@@ -235,20 +249,22 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
 
       setMapReady(true);
     });
-  }, [dataset, maxCellCount, basemapFailed, setAoi, setMapReady]);
+  }, [dataset, study, basemapFailed, setAoi, setMapReady]);
 
+  // Create the map once per dataset (not on every month change)
   useEffect(() => {
     initMap();
     return () => {
+      setMapReady(false);
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [initMap]);
+  }, [initMap, setMapReady]);
 
   // Sync counts and selected feature states to map
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || !mapReady) return;
 
     const matched = snapCellsToAoi(aoi, dataset.grid.features);
     const matchedSet = new Set(matched);
@@ -264,7 +280,16 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     if (map.getLayer('ca-grid-fill')) {
       map.setPaintProperty('ca-grid-fill', 'fill-color', buildCividisChoropleth(maxCellCount));
     }
-  }, [aoi, cellCounts, maxCellCount, dataset, setSelectedCellIndexes]);
+  }, [aoi, cellCounts, maxCellCount, dataset, mapReady, setSelectedCellIndexes]);
+
+  // Zoom to a box requested elsewhere (coordinate form)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !fitRequest) return;
+    const [w, s, e, n] = fitRequest.bbox;
+    map.fitBounds([[w, s], [e, n]], { padding: 60, duration: 600, maxZoom: 9 });
+    setActiveRegion('draw');
+  }, [fitRequest, mapReady]);
 
   // Handle region preset selection
   const handleSelectRegion = (key: RegionKey) => {
@@ -276,17 +301,13 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
       return;
     }
 
-    const nextAoi = REGION_PRESETS[key];
+    const preset = presets.find((p) => p.id === key);
+    const nextAoi = preset ? ({ mode: 'bbox', bbox: preset.bbox } as const) : ({ mode: 'state' } as const);
     setAoi(nextAoi);
 
-    const map = mapRef.current;
-    if (map) {
-      if (key === 'all') {
-        map.easeTo({ center: [-119.5, 37.2], zoom: 5.6, duration: 600 });
-      } else if (nextAoi.mode === 'bbox') {
-        const [w, s, e, n] = nextAoi.bbox;
-        map.fitBounds([[w, s], [e, n]], { padding: 40, duration: 600 });
-      }
+    const box = aoiBBox(nextAoi, study);
+    if (box && mapRef.current) {
+      mapRef.current.fitBounds([[box[0], box[1]], [box[2], box[3]]], { padding: 48, duration: 600 });
     }
   };
 
@@ -297,10 +318,12 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
 
     if (!isDrawing) {
       map.getCanvas().style.cursor = '';
+      map.dragPan.enable();
       return;
     }
 
     map.getCanvas().style.cursor = 'crosshair';
+    map.dragPan.disable();
 
     const onMouseDown = (e: maplibregl.MapMouseEvent) => {
       setDrawStart([e.lngLat.lng, e.lngLat.lat]);
@@ -359,6 +382,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     map.on('mouseup', onMouseUp);
 
     return () => {
+      map.dragPan.enable();
       map.off('mousedown', onMouseDown);
       map.off('mousemove', onMouseMove);
       map.off('mouseup', onMouseUp);
@@ -382,7 +406,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     timeZone: 'UTC',
   });
 
-  const isEstimated = dataset.months[mIdx] < '2012-02';
+  const isEstimated = isPredictedMonth(dataset.months[mIdx]);
 
   return (
     <div className="bg-app-surface1 rounded-xl border border-app-border overflow-hidden flex flex-col shadow-sm h-full font-sans">
@@ -390,7 +414,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
       <div className="p-3 border-b border-app-border flex flex-wrap items-center justify-between gap-2 bg-app-surface2/50">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-xs font-semibold text-app-textSubdued uppercase mr-1">Area:</span>
-          {(['all', 'north', 'central', 'south'] as const).map((key) => {
+          {[{ id: 'all', name: copy.regions.all(studyName(dataset)) }, ...presets].map(({ id: key, name }) => {
             const isActive = activeRegion === key;
             return (
               <button
@@ -403,7 +427,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
                     : 'bg-app-surface1 text-gray-300 hover:text-white hover:bg-app-elevated border border-app-border'
                 }`}
               >
-                {copy.regions[key]}
+                {name}
               </button>
             );
           })}
@@ -427,11 +451,11 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         {/* Quick jump to August 2020 peak */}
         <button
           type="button"
-          onClick={() => setActiveMonth('2020-08')}
+          onClick={() => setActiveMonth(peak)}
           className="text-xs text-app-textMuted hover:text-amber-400 transition-colors flex items-center gap-1 py-1 px-2 rounded hover:bg-app-surface1"
         >
           <RotateCcw className="w-3 h-3 text-amber-400" />
-          <span>{copy.map.jumpToRecord}</span>
+          <span>{copy.map.jumpToPeak(monthLabel(peak))}</span>
         </button>
       </div>
 
@@ -443,17 +467,16 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         <div className="absolute bottom-4 left-4 z-10 bg-app-surface1/95 backdrop-blur-md border border-app-border rounded-lg p-2.5 shadow-xl text-xs font-sans">
           <div className="font-semibold text-white mb-1.5 flex items-center justify-between gap-3">
             <span>{copy.map.legendTitle}</span>
-            <span className="text-[10px] text-app-textSubdued font-mono">Cividis</span>
           </div>
 
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-app-textSubdued font-mono">0</span>
+            <span className="text-[11px] text-app-textSubdued tabular-nums">0</span>
             <div className="w-28 h-2.5 rounded-sm overflow-hidden flex border border-black/40">
               {CIVIDIS.map((hex, i) => (
                 <div key={i} className="flex-1 h-full" style={{ backgroundColor: hex }} />
               ))}
             </div>
-            <span className="text-[11px] text-amber-300 font-mono font-bold">
+            <span className="text-[11px] text-amber-300 tabular-nums font-bold">
               {Math.round(maxCellCount).toLocaleString()}
             </span>
           </div>
@@ -536,10 +559,10 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
           />
 
           {/* Slider Labels Marking Timeline Eras */}
-          <div className="flex justify-between items-center text-[11px] text-app-textSubdued font-mono mt-1">
-            <span>2000-11</span>
-            <span className="text-amber-400 font-bold border-b border-dashed border-amber-500/50">2012-02 (Sensor Transition)</span>
-            <span>2021-12</span>
+          <div className="flex justify-between items-center text-[11px] text-app-textSubdued tabular-nums mt-1">
+            <span>{dataset.months[0]}</span>
+            <span className="font-semibold text-amber-300">{copy.map.measuredFrom(getEra().blendStart)}</span>
+            <span>{dataset.months[dataset.numMonths - 1]}</span>
           </div>
         </div>
       </div>

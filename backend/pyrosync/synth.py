@@ -336,8 +336,14 @@ def generate_synthetic_dataset(
         "generatedAtUtc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "synthetic": True,
         "studyArea": {
-            "name": "California (Synthetic Test Fixture)",
+            "name": "California",
             "bbox": [-124.48, 32.53, -114.13, 42.01],
+            "areaKm2": 423970,
+            "presets": [
+                {"id": "north", "name": "North", "bbox": [-124.5, 38.8, -119.5, 42.0]},
+                {"id": "central", "name": "Central", "bbox": [-123.0, 35.5, -118.0, 38.8]},
+                {"id": "south", "name": "South", "bbox": [-121.0, 32.5, -114.1, 35.5]},
+            ],
         },
         "coverage": {
             "start": "2000-11",
