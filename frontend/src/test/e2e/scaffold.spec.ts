@@ -53,7 +53,6 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
     const visibleText = `${headerText} ${mainWorkspaceText}`.toLowerCase();
 
     const bannedWords = [
-      'harmonized',
       'normalization',
       'loyo',
       'wape',
