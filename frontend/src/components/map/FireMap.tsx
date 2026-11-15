@@ -410,10 +410,25 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
       });
 
       // Hover Tooltip on 10 km cell
-      const popup = new maplibregl.Popup({
-        closeButton: true,
+      const hoverPopup = new maplibregl.Popup({
+        closeButton: false,
         closeOnClick: false,
         className: 'pyrosync-cell-popup',
+      });
+
+      // Interactive Click Card for selected hotspot
+      const clickPopup = new maplibregl.Popup({
+        closeButton: true,
+        closeOnClick: true,
+        className: 'pyrosync-cell-popup',
+      });
+
+      let clickPopupTimer: ReturnType<typeof setTimeout> | null = null;
+      clickPopup.on('close', () => {
+        if (clickPopupTimer) {
+          clearTimeout(clickPopupTimer);
+          clickPopupTimer = null;
+        }
       });
 
       map.on('mousemove', 'ca-grid-stroke', (e) => {
@@ -425,7 +440,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         if (count <= 0) return;
 
         map.getCanvas().style.cursor = 'pointer';
-        popup
+        hoverPopup
           .setLngLat(e.lngLat)
           .setHTML(
             `<div class="p-2 text-xs font-sans text-gray-100 font-medium bg-gray-900/95 border border-amber-500/40 rounded-lg shadow-xl">
@@ -442,16 +457,22 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
 
       map.on('mouseleave', 'ca-grid-stroke', () => {
         map.getCanvas().style.cursor = '';
-        popup.remove();
+        hoverPopup.remove();
       });
 
       // Click on fire emojis or active hotspot points
       const handleHotspotClick = (lat: number, lon: number, count: number) => {
+        hoverPopup.remove();
+        if (clickPopupTimer) {
+          clearTimeout(clickPopupTimer);
+          clickPopupTimer = null;
+        }
+
         setAoi({ mode: 'radius', center: [lon, lat], radiusKm: 30 });
         setActiveRegion('draw');
         setSearchedPlaceName(`Hotspot ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`);
 
-        popup
+        clickPopup
           .setLngLat([lon, lat])
           .setHTML(
             `<div class="p-2.5 text-xs font-sans text-gray-100 font-medium bg-gray-950/95 border border-amber-500 rounded-lg shadow-2xl min-w-[210px]">
@@ -469,9 +490,18 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
               <div class="mt-2 text-[10px] text-amber-300 font-medium bg-amber-500/15 border border-amber-500/30 px-2 py-1 rounded text-center">
                 ✓ Focused as active 30 km area
               </div>
+              <div class="mt-1 text-[9px] text-gray-400 text-center font-mono">
+                Auto-closing in 5s
+              </div>
             </div>`
           )
           .addTo(map);
+
+        // Automatically dismiss the hotspot card after 5 seconds
+        clickPopupTimer = setTimeout(() => {
+          clickPopup.remove();
+          clickPopupTimer = null;
+        }, 5000);
       };
 
       map.on('mouseenter', 'ca-fire-emojis', () => {
