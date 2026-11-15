@@ -39,6 +39,10 @@ pip install -r requirements-dev.txt
 # Generate synthetic test dataset with edge cases
 python -m pyrosync.cli synth --out ../frontend/public/datasets
 
+# Export real data from the pipeline outputs in data/
+# (Requires Phase 2-7 Parquet/CSV files in data/; see docs/PIPELINE.md)
+python -m pyrosync.cli export --data ../data --out ../frontend/public/datasets
+
 # Validate schemas and gzip budgets (< 3 MB)
 python -m pyrosync.cli check --data ../frontend/public/datasets
 ```
