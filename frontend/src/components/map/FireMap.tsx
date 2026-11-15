@@ -7,7 +7,20 @@ import type { DenseDataset } from '../../datasource/load';
 import { snapCellsToAoi, aoiBBox, type RegionKey } from '../../domain/aoi';
 import { studyGeometry, studyName, studyPresets, peakMonth, monthLabel, formatLatLon } from '../../domain/study';
 import { useAppStore } from '../../store/appStore';
-import { Play, Pause, ChevronLeft, ChevronRight, Square, RotateCcw, Flame, Grid as GridIcon, Satellite, Moon } from 'lucide-react';
+import {
+  Play,
+  Pause,
+  ChevronLeft,
+  ChevronRight,
+  Square,
+  RotateCcw,
+  Flame,
+  Grid as GridIcon,
+  Satellite,
+  Moon,
+  Radio,
+  Sparkles,
+} from 'lucide-react';
 import { getEra } from '../../domain/era';
 import { isPredictedMonth } from '../../domain/aggregate';
 import copy from '../../copy';
@@ -66,6 +79,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     setAoi,
     setSelectedCellIndexes,
     sensorMode,
+    setSensorMode,
     activeMonth,
     setActiveMonth,
     setMapReady,
@@ -86,6 +100,9 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
   const [basemapFailed, setBasemapFailed] = useState(false);
   const [searchedPlaceName, setSearchedPlaceName] = useState<string | null>(null);
   const cellCountsRef = useRef<Float32Array>(new Float32Array(0));
+  const sensorModeRef = useRef(sensorMode);
+  sensorModeRef.current = sensorMode;
+  const activeMonthNameYearRef = useRef('');
 
   // Month Index
   const mIdx = useMemo(() => {
@@ -93,26 +110,37 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     return dataset.monthIndexMap.get(activeMonth) ?? dataset.numMonths - 1;
   }, [activeMonth, dataset]);
 
-  // Extract cell counts for active month
+  // Extract cell counts for active month, filtered by selected AOI
   const { cellCounts, maxCellCount, activePointsGeoJson } = useMemo(() => {
     const counts = new Float32Array(dataset.numCells);
     const offset = mIdx * dataset.numCells;
     let max = 0;
     const pointFeatures: GeoJSON.Feature<GeoJSON.Point>[] = [];
 
+    // Check which cells belong to the active AOI
+    const matched = snapCellsToAoi(aoi, dataset.grid.features);
+    const matchedSet = new Set(matched);
+    const isAreaFiltered = aoi.mode !== 'state';
+
     for (let c = 0; c < dataset.numCells; c++) {
+      // If a specific area is selected, turn off fire hotspots outside that area!
+      const inActiveArea = !isAreaFiltered || matchedSet.has(c);
+
       let count = 0;
-      if (sensorMode === 'modis') {
-        count = dataset.modisTotal[offset + c] || 0;
-      } else if (sensorMode === 'viirs') {
-        count = dataset.viirsTotal[offset + c] || 0;
-      } else {
-        count = dataset.harmonizedTotal[offset + c] || 0;
+      if (inActiveArea) {
+        if (sensorMode === 'modis') {
+          count = dataset.modisTotal[offset + c] || 0;
+        } else if (sensorMode === 'viirs') {
+          count = dataset.viirsTotal[offset + c] || 0;
+        } else {
+          count = dataset.harmonizedTotal[offset + c] || 0;
+        }
       }
+
       counts[c] = count;
       if (count > max) max = count;
 
-      if (count > 0) {
+      if (count > 0 && inActiveArea) {
         const f = dataset.grid.features[c];
         pointFeatures.push({
           type: 'Feature',
@@ -136,7 +164,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     };
 
     return { cellCounts: counts, maxCellCount: max, activePointsGeoJson: pointsGeoJson };
-  }, [dataset, mIdx, sensorMode]);
+  }, [dataset, mIdx, sensorMode, aoi]);
 
   cellCountsRef.current = cellCounts;
   maxCountRef.current = maxCellCount;
@@ -383,7 +411,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
 
       // Hover Tooltip on 10 km cell
       const popup = new maplibregl.Popup({
-        closeButton: false,
+        closeButton: true,
         closeOnClick: false,
         className: 'pyrosync-cell-popup',
       });
@@ -417,16 +445,64 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
         popup.remove();
       });
 
+      // Click on fire emojis or active hotspot points
+      const handleHotspotClick = (lat: number, lon: number, count: number) => {
+        setAoi({ mode: 'radius', center: [lon, lat], radiusKm: 30 });
+        setActiveRegion('draw');
+        setSearchedPlaceName(`Hotspot ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`);
+
+        popup
+          .setLngLat([lon, lat])
+          .setHTML(
+            `<div class="p-2.5 text-xs font-sans text-gray-100 font-medium bg-gray-950/95 border border-amber-500 rounded-lg shadow-2xl min-w-[210px]">
+              <div class="flex items-center gap-2 mb-1.5 pb-1 border-b border-gray-800">
+                <span class="text-xl">🔥</span>
+                <div>
+                  <div class="text-amber-400 font-bold text-sm leading-tight">${Math.round(count).toLocaleString()} Fire Detections</div>
+                  <div class="text-[10px] text-gray-400">${activeMonthNameYearRef.current}</div>
+                </div>
+              </div>
+              <div class="text-[11px] text-gray-300 space-y-0.5">
+                <div><span class="text-gray-500">Coordinates:</span> ${formatLatLon(lat, lon)}</div>
+                <div><span class="text-gray-500">Sensor:</span> <span class="uppercase text-amber-300 font-semibold">${sensorModeRef.current}</span></div>
+              </div>
+              <div class="mt-2 text-[10px] text-amber-300 font-medium bg-amber-500/15 border border-amber-500/30 px-2 py-1 rounded text-center">
+                ✓ Focused as active 30 km area
+              </div>
+            </div>`
+          )
+          .addTo(map);
+      };
+
+      map.on('mouseenter', 'ca-fire-emojis', () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+      map.on('mouseleave', 'ca-fire-emojis', () => {
+        map.getCanvas().style.cursor = '';
+      });
+
+      map.on('click', 'ca-fire-emojis', (e) => {
+        if (!e.features || e.features.length === 0) return;
+        const f = e.features[0];
+        const count = f.properties?.count ?? 0;
+        const lat = f.properties?.lat;
+        const lon = f.properties?.lon;
+        if (lat !== undefined && lon !== undefined) {
+          handleHotspotClick(lat, lon, count);
+        }
+      });
+
       // Click cell to inspect or select
       map.on('click', 'ca-grid-stroke', (e) => {
         if (!e.features || e.features.length === 0) return;
         const f = e.features[0];
         const lon = f.properties?.lon;
         const lat = f.properties?.lat;
+        const cellId = f.properties?.id;
+        const cIdx = dataset.cellIndexMap.get(cellId);
+        const count = cIdx !== undefined ? cellCountsRef.current[cIdx] : 0;
         if (lon !== undefined && lat !== undefined) {
-          setAoi({ mode: 'radius', center: [lon, lat], radiusKm: 30 });
-          setActiveRegion('draw');
-          setSearchedPlaceName(`${lat.toFixed(2)}°, ${lon.toFixed(2)}°`);
+          handleHotspotClick(lat, lon, count);
         }
       });
 
@@ -656,6 +732,7 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
     year: 'numeric',
     timeZone: 'UTC',
   });
+  activeMonthNameYearRef.current = activeMonthNameYear;
 
   const isEstimated = isPredictedMonth(dataset.months[mIdx]);
 
@@ -907,6 +984,91 @@ export const FireMap: React.FC<FireMapProps> = ({ dataset }) => {
             <span className="font-semibold text-amber-300">{copy.map.measuredFrom(getEra().blendStart)}</span>
             <span>{dataset.months[dataset.numMonths - 1]}</span>
           </div>
+        </div>
+      </div>
+
+      {/* 4. Sensor Record Section: Harmonized vs MODIS vs VIIRS */}
+      <div className="p-3 bg-app-surface2/70 border-t border-app-border flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-bold text-gray-300 uppercase tracking-wide flex items-center gap-1.5">
+            <Radio className="w-3.5 h-3.5 text-amber-400" />
+            <span>{copy.map.sensorDataset}:</span>
+          </span>
+
+          <div className="inline-flex rounded-lg p-0.5 bg-app-surface1 border border-app-border shadow-inner">
+            <button
+              type="button"
+              onClick={() => setSensorMode('harmonized')}
+              aria-pressed={sensorMode === 'harmonized'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all min-h-[38px] ${
+                sensorMode === 'harmonized'
+                  ? 'bg-amber-500 text-black shadow-sm font-bold'
+                  : 'text-gray-300 hover:text-white hover:bg-app-surface2'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{copy.map.sensorHarmonized}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                  sensorMode === 'harmonized' ? 'bg-black/20 text-black font-semibold' : 'bg-app-surface2 text-gray-400'
+                }`}
+              >
+                {copy.map.sensorHarmonizedYears}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSensorMode('modis')}
+              aria-pressed={sensorMode === 'modis'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all min-h-[38px] ${
+                sensorMode === 'modis'
+                  ? 'bg-amber-500 text-black shadow-sm font-bold'
+                  : 'text-gray-300 hover:text-white hover:bg-app-surface2'
+              }`}
+            >
+              <span>{copy.map.sensorModis}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                  sensorMode === 'modis' ? 'bg-black/20 text-black font-semibold' : 'bg-app-surface2 text-gray-400'
+                }`}
+              >
+                {copy.map.sensorModisYears}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSensorMode('viirs')}
+              aria-pressed={sensorMode === 'viirs'}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all min-h-[38px] ${
+                sensorMode === 'viirs'
+                  ? 'bg-amber-500 text-black shadow-sm font-bold'
+                  : 'text-gray-300 hover:text-white hover:bg-app-surface2'
+              }`}
+            >
+              <span>{copy.map.sensorViirs}</span>
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                  sensorMode === 'viirs' ? 'bg-black/20 text-black font-semibold' : 'bg-app-surface2 text-gray-400'
+                }`}
+              >
+                {copy.map.sensorViirsYears}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div className="text-[11px] text-app-textMuted hidden sm:flex items-center gap-1.5">
+          {sensorMode === 'harmonized' && (
+            <span className="text-amber-300/90 font-medium">★ {copy.map.sensorHarmonizedDesc}</span>
+          )}
+          {sensorMode === 'modis' && (
+            <span className="text-gray-300 font-medium">{copy.map.sensorModisDesc}</span>
+          )}
+          {sensorMode === 'viirs' && (
+            <span className="text-emerald-400 font-medium">{copy.map.sensorViirsDesc}</span>
+          )}
         </div>
       </div>
     </div>

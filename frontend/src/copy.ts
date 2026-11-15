@@ -52,6 +52,16 @@ export const copy = {
     searchAriaLabel: 'Search location on map',
     clearSearch: 'Clear search',
     locationFound: (name: string) => `Showing fire activity near ${name}`,
+    sensorDataset: 'Sensor Dataset',
+    sensorHarmonized: 'Harmonized',
+    sensorHarmonizedYears: '2000–2021',
+    sensorHarmonizedDesc: 'Continuous 22-year calibrated record combining MODIS & VIIRS',
+    sensorModis: 'MODIS',
+    sensorModisYears: '2000–2021',
+    sensorModisDesc: 'Raw 1 km MODIS active-fire detections (Terra & Aqua)',
+    sensorViirs: 'VIIRS',
+    sensorViirsYears: 'from 2012',
+    sensorViirsDesc: 'Direct 375 m Suomi-NPP VIIRS observations (available from Feb 2012)',
   },
 
   summary: {
