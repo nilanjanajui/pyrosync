@@ -163,4 +163,34 @@ test.describe('PyroSync Non-Expert UI Redesign & Accessibility Acceptance', () =
     await expect(page.getByText('Failed File: manifest.json')).toBeVisible();
     await expect(page.getByText('Failed Field: studyArea')).toBeVisible();
   });
+
+  test('location search finds landmarks and updates map location', async ({ page }) => {
+    await page.goto('/');
+
+    const searchInput = page.getByRole('combobox', { name: /Search location/i });
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill('Yosemite');
+
+    const yosemiteOption = page.getByRole('option', { name: /Yosemite National Park/i });
+    await expect(yosemiteOption).toBeVisible();
+    await yosemiteOption.click();
+
+    await expect(page.getByText(/Yosemite National Park/i).first()).toBeVisible();
+  });
+
+  test('map switches between Satellite and Dark canvas, and Fire glow and Grid view', async ({ page }) => {
+    await page.goto('/');
+
+    const darkBtn = page.getByRole('button', { name: /Dark canvas/i });
+    const satBtn = page.getByRole('button', { name: /Satellite/i });
+    await expect(darkBtn).toHaveAttribute('aria-pressed', 'true');
+    await satBtn.click();
+    await expect(satBtn).toHaveAttribute('aria-pressed', 'true');
+
+    const glowBtn = page.getByRole('button', { name: /Fire glow & icons/i });
+    const gridBtn = page.getByRole('button', { name: /Grid cells/i });
+    await expect(glowBtn).toHaveAttribute('aria-pressed', 'true');
+    await gridBtn.click();
+    await expect(gridBtn).toHaveAttribute('aria-pressed', 'true');
+  });
 });
